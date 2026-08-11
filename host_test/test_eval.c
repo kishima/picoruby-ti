@@ -559,6 +559,15 @@ test_inherited_builtin_argument_diagnostic(void) {
 }
 
 static void
+test_declared_constant_type(void) {
+  TiDiagnosticList diagnostics = diagnose_source("x = 1 + GPIO::LOW");
+  assert(diagnostics.count == 0);
+
+  diagnostics = diagnose_source("\"x\".tr(GPIO::LOW, \"a\")");
+  assert(diagnostics.count == 1);
+}
+
+static void
 test_subclass_argument_satisfies_superclass_parameter(void) {
   TiDiagnosticList diagnostics =
     diagnose_source("class MyPin < GPIO\n"
@@ -697,6 +706,7 @@ main(void) {
   test_declared_instance_variable_diagnostic();
   test_declared_instance_variable_type_at_cursor();
   test_subclass_argument_satisfies_superclass_parameter();
+  test_declared_constant_type();
 
   return 0;
 }

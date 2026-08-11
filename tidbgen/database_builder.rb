@@ -47,6 +47,7 @@ module TiDatabaseGenerator
         builtin_methods: @builtin_methods,
         builtin_arguments: @builtin_arguments,
         builtin_instance_variables: @builtin_instance_variables,
+        builtin_constants: @builtin_constants,
         class_identifiers_by_full_name: @class_identifiers_by_full_name,
         enumeration_names: @enumeration_names,
         name_pool: @name_pool,
@@ -110,6 +111,7 @@ module TiDatabaseGenerator
       @builtin_methods = []
       @builtin_arguments = []
       @builtin_instance_variables = []
+      @builtin_constants = []
 
       @ordered_class_names.each do |full_class_name|
         class_identifier = @class_identifiers_by_full_name[full_class_name]
@@ -139,6 +141,11 @@ module TiDatabaseGenerator
           builtin_class:
         )
 
+        append_builtin_constants_and_set_class_range(
+          collected_class:,
+          builtin_class:
+        )
+
         @builtin_classes[class_identifier] = builtin_class
       end
 
@@ -154,6 +161,10 @@ module TiDatabaseGenerator
         raise "instance variable table exceeds 65535 entries " \
               "(#{@builtin_instance_variables.length})"
       end
+
+      if @builtin_constants.length > 65_535
+        raise "constant table exceeds 65535 entries (#{@builtin_constants.length})"
+      end
     end
 
     def build_empty_builtin_class
@@ -164,8 +175,51 @@ module TiDatabaseGenerator
         static_method_start_index: 0,
         static_method_count: 0,
         instance_variable_start_index: 0,
-        instance_variable_count: 0
+        instance_variable_count: 0,
+        constant_start_index: 0,
+        constant_count: 0
       )
+    end
+
+    def append_builtin_constants_and_set_class_range(
+      collected_class:,
+      builtin_class:
+    )
+
+      builtin_class.constant_start_index = @builtin_constants.length
+
+      collected_class.constants.each do |name, collected_constant|
+        error_context = "#{collected_class.full_name}::#{name}"
+
+        resolved_type =
+          @type_resolver.resolve(
+            signature_type: collected_constant.type,
+            owner_full_name: collected_class.full_name
+          )
+
+        class_identifiers =
+          fallback_to_untyped_if_oversized_union(
+            class_identifiers: resolved_type.class_identifiers,
+            error_context:
+          )
+
+        @builtin_constants << BuiltinConstantRecord.new(
+          name_offset: @name_pool.add_string_and_return_offset(string: name),
+          signature_offset: @signature_pool.add_string_and_return_offset(
+            string: "#{name}: #{collected_constant.type}"
+          ),
+          document_offset: @document_pool.add_string_and_return_offset(
+            string: collected_constant.comment
+          ),
+          class_identifier: class_identifiers.first || 0,
+          union_index: @union_pool.resolve_union_index(
+            class_identifiers:,
+            error_context:
+          )
+        )
+      end
+
+      builtin_class.constant_count = collected_class.constants.length
     end
 
     def append_builtin_instance_variables_and_set_class_range(

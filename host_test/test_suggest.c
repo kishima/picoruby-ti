@@ -316,6 +316,32 @@ test_self_receiver_suggestion(void) {
 }
 
 static void
+test_scope_resolution_constant_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("x = GPIO::");
+
+  assert(find_suggestion(&suggestions, "LOW"));
+  assert(find_suggestion(&suggestions, "HIGH"));
+  /* :: also reaches the static methods */
+  assert(find_suggestion(&suggestions, "new"));
+}
+
+static void
+test_scope_resolution_constant_prefix(void) {
+  TiSuggestionList suggestions = suggest_source("x = GPIO::L");
+
+  assert(find_suggestion(&suggestions, "LOW"));
+  assert(!find_suggestion(&suggestions, "HIGH"));
+}
+
+static void
+test_dot_receiver_offers_no_constants(void) {
+  TiSuggestionList suggestions = suggest_source("GPIO.");
+
+  assert(!find_suggestion(&suggestions, "LOW"));
+  assert(find_suggestion(&suggestions, "new"));
+}
+
+static void
 test_declared_instance_variable_suggestion(void) {
   TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
                                                 "  def use\n"
@@ -393,6 +419,9 @@ main(void) {
   test_inheritance_does_not_leak_sibling_methods();
   test_self_receiver_suggestion();
   test_receiverless_inherited_method_suggestion();
+  test_scope_resolution_constant_suggestion();
+  test_scope_resolution_constant_prefix();
+  test_dot_receiver_offers_no_constants();
   test_declared_instance_variable_suggestion();
   test_declared_instance_variable_via_user_chain();
   test_assigned_instance_variable_overrides_declaration();

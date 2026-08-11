@@ -109,7 +109,8 @@ module TiDatabaseGenerator
           direct_ancestors: [],
           instance_methods: {},
           static_methods: {},
-          instance_variables: {}
+          instance_variables: {},
+          constants: {}
         )
 
       @collected_classes[full_class_name] = collected_class
@@ -169,10 +170,27 @@ module TiDatabaseGenerator
         when RBS::AST::Members::InstanceVariable
           collect_instance_variable(collected_class:, instance_variable_member: member)
 
+        when RBS::AST::Declarations::Constant
+          collect_constant(collected_class:, constant_declaration: member)
+
         when RBS::AST::Members::Alias
           collect_method_alias(collected_class:, method_alias_member: member)
         end
       end
+    end
+
+    def collect_constant(collected_class:, constant_declaration:)
+      constant_name = constant_declaration.name.name.to_s
+
+      collected_class.constants[constant_name] ||=
+        CollectedConstant.new(
+          name: constant_name,
+          type: constant_declaration.type,
+          comment:
+            build_visible_comment(
+              comment: constant_declaration.comment&.string.to_s
+            )
+        )
     end
 
     def collect_instance_variable(collected_class:, instance_variable_member:)
