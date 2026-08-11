@@ -79,6 +79,45 @@ find_enclosing_class_on_visit(const pm_node_t *node, void *data) {
   return true;
 }
 
+/* Track the class enclosing the cursor so receiverless lookups, an explicit
+   `self` receiver, and declared instance variables all resolve against it.
+   Shared with hover. */
+void
+ti_set_enclosing_class_at_cursor(
+  TiContext *context,
+  const pm_node_t *root,
+  int cursor_byte_offset
+) {
+
+  EnclosingClassSearch class_search = {
+    .cursor = context->source + cursor_byte_offset,
+    .target = NULL,
+    .target_length = 0,
+  };
+
+  pm_visit_node(root, find_enclosing_class_on_visit, &class_search);
+
+  if (!class_search.target)
+    return;
+
+  uint16_t enclosing_class_name_id;
+
+  if (
+    !ti_convert_constant_id(
+      context,
+      class_search.target->name,
+      &enclosing_class_name_id
+    )
+  ) {
+
+    return;
+  }
+
+  context->current_class_name_id = enclosing_class_name_id;
+  context->current_class_id =
+    ti_get_defined_class_id(enclosing_class_name_id);
+}
+
 static bool
 find_suggest_target_on_visit(const pm_node_t *node, void *data) {
   SuggestTargetSearch *search = data;
@@ -489,32 +528,7 @@ ti_collect_suggestions_at_cursor(
     return 0;
   }
 
-  /* Track the class enclosing the cursor so both receiverless lookups and
-     an explicit `self` receiver resolve against it. */
-  EnclosingClassSearch class_search = {
-    .cursor = context->source + cursor_byte_offset,
-    .target = NULL,
-    .target_length = 0,
-  };
-
-  pm_visit_node(root, find_enclosing_class_on_visit, &class_search);
-
-  if (class_search.target) {
-    uint16_t enclosing_class_name_id;
-
-    if (
-      ti_convert_constant_id(
-        context,
-        class_search.target->name,
-        &enclosing_class_name_id
-      )
-    ) {
-
-      context->current_class_name_id = enclosing_class_name_id;
-      context->current_class_id =
-        ti_get_defined_class_id(enclosing_class_name_id);
-    }
-  }
+  ti_set_enclosing_class_at_cursor(context, root, cursor_byte_offset);
 
   if (!has_receiver) {
     if (prefix_length > 0 && prefix[0] >= 'A' && prefix[0] <= 'Z') {
