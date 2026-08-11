@@ -36,7 +36,8 @@ find_suggest_prefix(
   size_t *dot_offset,
   const uint8_t **prefix,
   size_t *prefix_length,
-  int *has_receiver
+  int *has_receiver,
+  int *is_scope
 ) {
 
   size_t cursor = (size_t)cursor_byte_offset;
@@ -46,10 +47,22 @@ find_suggest_prefix(
     start--;
 
   *has_receiver = start > 0 && context->source[start - 1] == '.';
+  *is_scope = 0;
   *dot_offset = start;
 
-  if (*has_receiver)
+  if (*has_receiver) {
     *dot_offset = start - 1;
+  } else if (
+    start > 1 &&
+    context->source[start - 1] == ':' &&
+    context->source[start - 2] == ':'
+  ) {
+    /* "Klass::PREF" -- scope resolution. The receiver expression ends
+       where the two colons begin. */
+    *has_receiver = 1;
+    *is_scope = 1;
+    *dot_offset = start - 2;
+  }
 
   *prefix = context->source + start;
   *prefix_length = cursor - start;
@@ -213,6 +226,45 @@ append_builtin_suggestions(
 
     if (show_class_name)
       suggestion->class_name = ti_get_builtin_class_name(class_id);
+  }
+}
+
+static void
+append_builtin_constant_suggestions(
+  uint8_t class_id,
+  const uint8_t *prefix,
+  size_t prefix_length,
+  TiSuggestionList *out
+) {
+
+  const TiBuiltinConstant *constants[TI_SUGGESTION_CAPACITY];
+
+  int constant_count =
+    ti_collect_builtin_constants_matching_prefix(
+      class_id,
+      prefix,
+      prefix_length,
+      constants,
+      TI_SUGGESTION_CAPACITY
+    );
+
+  for (int index = 0; index < constant_count; index++) {
+    const TiBuiltinConstant *constant = constants[index];
+    const char *name = ti_get_builtin_constant_name(constant);
+    const char *signature = ti_get_builtin_constant_signature(constant);
+
+    if (has_suggestion(out, name, signature))
+      continue;
+
+    if (out->count >= TI_SUGGESTION_CAPACITY)
+      return;
+
+    TiSuggestion *suggestion = &out->items[out->count++];
+    suggestion->detail = signature;
+    suggestion->document = ti_get_builtin_constant_document(constant);
+    suggestion->contents = name;
+    suggestion->contents_length = (int)strlen(name);
+    suggestion->class_name = NULL;
   }
 }
 
@@ -515,6 +567,7 @@ ti_collect_suggestions_at_cursor(
   const uint8_t *prefix;
   size_t prefix_length;
   int has_receiver;
+  int is_scope;
 
   if (!find_suggest_prefix(
         context,
@@ -522,7 +575,8 @@ ti_collect_suggestions_at_cursor(
         &dot_offset,
         &prefix,
         &prefix_length,
-        &has_receiver
+        &has_receiver,
+        &is_scope
       )) {
 
     return 0;
@@ -617,9 +671,22 @@ ti_collect_suggestions_at_cursor(
         );
       }
     } else if (target_t->object_class_id != TI_CLASS_UNTYPED) {
+      int is_static_target = (target_t->t_flags & TI_T_FLAG_STATIC) != 0;
+
+      /* "Klass::" offers the class constants first, then the static
+         methods (:: can invoke those too). "Klass." stays methods-only. */
+      if (is_scope && is_static_target) {
+        append_builtin_constant_suggestions(
+          target_t->object_class_id,
+          prefix,
+          prefix_length,
+          out
+        );
+      }
+
       append_builtin_suggestions(
         target_t->object_class_id,
-        (target_t->t_flags & TI_T_FLAG_STATIC) != 0,
+        is_static_target,
         show_class_name,
         prefix,
         prefix_length,

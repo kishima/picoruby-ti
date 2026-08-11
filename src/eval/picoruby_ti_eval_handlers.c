@@ -60,6 +60,57 @@ ti_handle_identifier(TiContext *context, pm_constant_id_t constant_id) {
 }
 
 uint16_t
+ti_handle_constant_path(
+  TiContext *context,
+  const pm_constant_path_node_t *constant_path
+) {
+
+  /* Only the plain "Klass::CONST" shape where Klass is a database class;
+     deeper paths and user-class constants stay untyped. */
+  if (
+    !constant_path->parent ||
+    PM_NODE_TYPE(constant_path->parent) != PM_CONSTANT_READ_NODE ||
+    constant_path->name == 0
+  ) {
+
+    return 0;
+  }
+
+  const pm_constant_t *parent_constant =
+    ti_get_constant(
+      context,
+      ((const pm_constant_read_node_t *)constant_path->parent)->name
+    );
+
+  if (!parent_constant)
+    return 0;
+
+  uint8_t class_id =
+    ti_get_builtin_class_id(parent_constant->start, parent_constant->length);
+
+  if (class_id == TI_CLASS_NONE)
+    return 0;
+
+  const pm_constant_t *constant_name =
+    ti_get_constant(context, constant_path->name);
+
+  if (!constant_name)
+    return 0;
+
+  const TiBuiltinConstant *builtin_constant =
+    ti_get_builtin_constant(
+      class_id,
+      constant_name->start,
+      constant_name->length
+    );
+
+  if (!builtin_constant || builtin_constant->class_identifier == 0)
+    return 0;
+
+  return ti_new_t(builtin_constant->class_identifier, 0, 0);
+}
+
+uint16_t
 ti_handle_const_evaluation(
   TiContext *context,
   const pm_constant_read_node_t *constant_read

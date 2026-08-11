@@ -13,6 +13,22 @@ uint8_t ti_get_builtin_instance_variable_class(
   const uint8_t *instance_variable_name,
   size_t instance_variable_name_length
 );
+/* Class constants declared in the RBS signatures ("BLACK: Integer"). */
+const TiBuiltinConstant *ti_get_builtin_constant(
+  uint8_t class_id,
+  const uint8_t *constant_name,
+  size_t constant_name_length
+);
+int ti_collect_builtin_constants_matching_prefix(
+  uint8_t class_id,
+  const uint8_t *prefix,
+  size_t prefix_length,
+  const TiBuiltinConstant **output_constants,
+  int output_capacity
+);
+const char *ti_get_builtin_constant_name(const TiBuiltinConstant *builtin_constant);
+const char *ti_get_builtin_constant_signature(const TiBuiltinConstant *builtin_constant);
+const char *ti_get_builtin_constant_document(const TiBuiltinConstant *builtin_constant);
 const TiBuiltinMethod *ti_get_builtin_instance_method(
   uint8_t class_id,
   const uint8_t *name,

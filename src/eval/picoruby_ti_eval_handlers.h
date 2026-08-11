@@ -12,5 +12,9 @@ uint16_t ti_handle_const_evaluation(
   TiContext *context,
   const pm_constant_read_node_t *constant_read
 );
+uint16_t ti_handle_constant_path(
+  TiContext *context,
+  const pm_constant_path_node_t *constant_path
+);
 
 #endif

@@ -8,11 +8,21 @@ module TiDatabaseGenerator
     static_method_start_index: "uint16_t",
     static_method_count: "uint16_t",
     instance_variable_start_index: "uint16_t",
-    instance_variable_count: "uint16_t"
+    instance_variable_count: "uint16_t",
+    constant_start_index: "uint16_t",
+    constant_count: "uint16_t"
   }.freeze
 
   BUILTIN_INSTANCE_VARIABLE_FIELD_DEFINITIONS = {
     name_offset: "uint16_t",
+    class_identifier: "uint8_t",
+    union_index: "uint16_t"
+  }.freeze
+
+  BUILTIN_CONSTANT_FIELD_DEFINITIONS = {
+    name_offset: "uint16_t",
+    signature_offset: "uint16_t",
+    document_offset: "uint16_t",
     class_identifier: "uint8_t",
     union_index: "uint16_t"
   }.freeze
@@ -50,7 +60,7 @@ module TiDatabaseGenerator
   CollectedClass = Struct.new(
     :full_name, :declaration_kind, :declarations,
     :direct_ancestors, :instance_methods, :static_methods,
-    :instance_variables,
+    :instance_variables, :constants,
     keyword_init: true
   )
 
@@ -61,6 +71,11 @@ module TiDatabaseGenerator
 
   CollectedInstanceVariable = Struct.new(
     :name, :type,
+    keyword_init: true
+  )
+
+  CollectedConstant = Struct.new(
+    :name, :type, :comment,
     keyword_init: true
   )
 
@@ -99,6 +114,10 @@ module TiDatabaseGenerator
 
   BuiltinInstanceVariableRecord = Struct.new(
     *BUILTIN_INSTANCE_VARIABLE_FIELD_DEFINITIONS.keys, keyword_init: true
+  )
+
+  BuiltinConstantRecord = Struct.new(
+    *BUILTIN_CONSTANT_FIELD_DEFINITIONS.keys, keyword_init: true
   )
 
   module ClassIdentifierCollection

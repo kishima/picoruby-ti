@@ -143,6 +143,12 @@ ti_eval_expression(TiContext *context, const pm_node_t *node, int depth) {
       (const pm_constant_read_node_t *)node
     );
 
+  case PM_CONSTANT_PATH_NODE:
+    return ti_handle_constant_path(
+      context,
+      (const pm_constant_path_node_t *)node
+    );
+
   case PM_SELF_NODE:
     if (context->current_class_id >= TI_CLASS_USER_BASE) {
       return ti_new_t(

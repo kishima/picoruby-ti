@@ -43,6 +43,11 @@ module TiDatabaseGenerator
           structure_field_definitions: BUILTIN_INSTANCE_VARIABLE_FIELD_DEFINITIONS
         )
 
+      builtin_constant_field_declarations =
+        generate_structure_field_declarations(
+          structure_field_definitions: BUILTIN_CONSTANT_FIELD_DEFINITIONS
+        )
+
       <<~HEADER
         #ifndef PICORUBY_TI_BUILTIN_DATABASE_H
         #define PICORUBY_TI_BUILTIN_DATABASE_H
@@ -81,6 +86,10 @@ module TiDatabaseGenerator
         } TiBuiltinInstanceVariable;
 
         typedef struct {
+        #{builtin_constant_field_declarations}
+        } TiBuiltinConstant;
+
+        typedef struct {
           uint8_t member_class_identifiers[4];
         } TiBuiltinUnion;
 
@@ -88,6 +97,7 @@ module TiDatabaseGenerator
         extern const TiBuiltinMethod ti_builtin_methods[];
         extern const TiBuiltinArgument ti_builtin_arguments[];
         extern const TiBuiltinInstanceVariable ti_builtin_instance_variables[];
+        extern const TiBuiltinConstant ti_builtin_constants[];
         extern const TiBuiltinUnion ti_builtin_unions[];
         extern const char ti_builtin_name_pool[];
         extern const char ti_builtin_signature_pool[];
@@ -96,6 +106,7 @@ module TiDatabaseGenerator
         extern const uint16_t ti_builtin_method_count;
         extern const uint16_t ti_builtin_argument_count;
         extern const uint16_t ti_builtin_instance_variable_count;
+        extern const uint16_t ti_builtin_constant_count;
         extern const uint16_t ti_builtin_union_count;
         extern const uint16_t ti_builtin_name_pool_size;
         extern const uint16_t ti_builtin_signature_pool_size;
@@ -145,6 +156,12 @@ module TiDatabaseGenerator
         c_type_name: "TiBuiltinInstanceVariable",
         c_variable_name: "ti_builtin_instance_variables",
         records: @builtin_database.builtin_instance_variables
+      )
+
+      source_code << generate_record_table_source(
+        c_type_name: "TiBuiltinConstant",
+        c_variable_name: "ti_builtin_constants",
+        records: @builtin_database.builtin_constants
       )
 
       source_code << generate_union_table_source
@@ -200,6 +217,7 @@ module TiDatabaseGenerator
         const uint16_t ti_builtin_method_count = #{@builtin_database.builtin_methods.length};
         const uint16_t ti_builtin_argument_count = #{@builtin_database.builtin_arguments.length};
         const uint16_t ti_builtin_instance_variable_count = #{@builtin_database.builtin_instance_variables.length};
+        const uint16_t ti_builtin_constant_count = #{@builtin_database.builtin_constants.length};
         const uint16_t ti_builtin_union_count = #{@builtin_database.union_pool.union_entries.length};
         const uint16_t ti_builtin_name_pool_size = #{@builtin_database.name_pool.binary_string.bytesize};
         const uint16_t ti_builtin_signature_pool_size = #{@builtin_database.signature_pool.binary_string.bytesize};

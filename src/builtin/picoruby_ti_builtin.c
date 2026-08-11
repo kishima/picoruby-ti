@@ -87,6 +87,102 @@ ti_get_builtin_instance_variable_class(
   return TI_CLASS_NONE;
 }
 
+const TiBuiltinConstant *
+ti_get_builtin_constant(
+  uint8_t class_id,
+  const uint8_t *constant_name,
+  size_t constant_name_length
+) {
+
+  if (
+    class_id == TI_CLASS_NONE ||
+    class_id >= ti_builtin_class_count ||
+    !constant_name ||
+    constant_name_length == 0
+  ) {
+
+    return NULL;
+  }
+
+  const TiBuiltinClass *builtin_class = &ti_builtin_classes[class_id];
+
+  for (uint16_t index = 0; index < builtin_class->constant_count; index++) {
+    const TiBuiltinConstant *builtin_constant =
+      &ti_builtin_constants[builtin_class->constant_start_index + index];
+
+    if (
+      builtin_name_matches(
+        &ti_builtin_name_pool[builtin_constant->name_offset],
+        constant_name,
+        constant_name_length
+      )
+    ) {
+
+      return builtin_constant;
+    }
+  }
+
+  return NULL;
+}
+
+int
+ti_collect_builtin_constants_matching_prefix(
+  uint8_t class_id,
+  const uint8_t *prefix,
+  size_t prefix_length,
+  const TiBuiltinConstant **output_constants,
+  int output_capacity
+) {
+
+  if (!output_constants || output_capacity <= 0)
+    return 0;
+
+  if (class_id == TI_CLASS_NONE || class_id >= ti_builtin_class_count)
+    return 0;
+
+  const TiBuiltinClass *builtin_class = &ti_builtin_classes[class_id];
+  int collected_count = 0;
+
+  for (uint16_t index = 0; index < builtin_class->constant_count; index++) {
+    const TiBuiltinConstant *builtin_constant =
+      &ti_builtin_constants[builtin_class->constant_start_index + index];
+
+    const char *builtin_constant_name =
+      &ti_builtin_name_pool[builtin_constant->name_offset];
+
+    if (
+      prefix_length > 0 &&
+      (strlen(builtin_constant_name) < prefix_length ||
+       memcmp(builtin_constant_name, prefix, prefix_length) != 0)
+    ) {
+
+      continue;
+    }
+
+    output_constants[collected_count++] = builtin_constant;
+
+    if (collected_count >= output_capacity)
+      break;
+  }
+
+  return collected_count;
+}
+
+const char *
+ti_get_builtin_constant_name(const TiBuiltinConstant *builtin_constant) {
+  return &ti_builtin_name_pool[builtin_constant->name_offset];
+}
+
+const char *
+ti_get_builtin_constant_signature(const TiBuiltinConstant *builtin_constant) {
+  return &ti_builtin_signature_pool[builtin_constant->signature_offset];
+}
+
+const char *
+ti_get_builtin_constant_document(const TiBuiltinConstant *builtin_constant) {
+  return &ti_builtin_document_pool[builtin_constant->document_offset];
+}
+
 static void
 get_builtin_method_range(
   uint8_t class_id,
