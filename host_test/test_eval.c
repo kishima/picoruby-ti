@@ -559,6 +559,29 @@ test_inherited_builtin_argument_diagnostic(void) {
 }
 
 static void
+test_declared_instance_variable_type_at_cursor(void) {
+  const char *source = "class MyPin < GPIO\n"
+                       "  def use\n"
+                       "    @pin\n"
+                       "  end\n"
+                       "end\n";
+  const char *target = strstr(source, "@pin\n");
+  assert(target);
+
+  TiHoverInfo hover_info;
+  int found = find_hover(
+    source,
+    (int)(target - source) + 1,
+    &hover_info
+  );
+
+  assert(found);
+  assert(!hover_info.is_method);
+  assert(strcmp(hover_info.variable_name, "@pin") == 0);
+  assert(strcmp(hover_info.type_name, "Integer") == 0);
+}
+
+static void
 test_declared_instance_variable_diagnostic(void) {
   TiDiagnosticList diagnostics =
     diagnose_source("class MyPin < GPIO\n"
@@ -644,6 +667,7 @@ main(void) {
   test_inherited_method_return_type();
   test_inherited_builtin_argument_diagnostic();
   test_declared_instance_variable_diagnostic();
+  test_declared_instance_variable_type_at_cursor();
 
   return 0;
 }

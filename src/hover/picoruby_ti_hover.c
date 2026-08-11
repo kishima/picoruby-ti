@@ -2,6 +2,7 @@
 #include "picoruby_ti_arena.h"
 #include "picoruby_ti_context.h"
 #include "picoruby_ti_eval.h"
+#include "picoruby_ti_eval_handlers.h"
 #include "picoruby_ti_suggest.h"
 #include "picoruby_ti_t_frame.h"
 #include "picoruby_ti_type.h"
@@ -158,8 +159,10 @@ ti_find_hover_at_cursor(
     .cursor_byte_offset = cursor_byte_offset,
   };
 
-  if (!ti_did_arena_overflow())
+  if (!ti_did_arena_overflow()) {
+    ti_set_enclosing_class_at_cursor(&context, root, cursor_byte_offset);
     pm_visit_node(root, find_hover_target_on_visit, &search);
+  }
 
   if (search.call) {
     TiSuggestionList suggestions;
@@ -203,11 +206,12 @@ ti_find_hover_at_cursor(
     }
   }
 
-  uint16_t name_id;
-  if (!search.call && search.name != 0 &&
-      ti_convert_constant_id(&context, search.name, &name_id)) {
+  if (!search.call && search.name != 0) {
     const pm_constant_t *constant = ti_get_constant(&context, search.name);
-    uint16_t t_node_index = ti_get_value_t(name_id);
+    /* ti_handle_identifier, not a bare value lookup: it also resolves
+       instance variables declared in the RBS signatures through the
+       enclosing class chain. */
+    uint16_t t_node_index = ti_handle_identifier(&context, search.name);
 
     if (
       constant &&

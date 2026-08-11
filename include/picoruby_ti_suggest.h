@@ -32,4 +32,12 @@ int ti_fill_suggestions_at_cursor(
   TiSuggestionList *out
 );
 
+/* Set context->current_class_id/name_id to the class enclosing the cursor
+   (no-op at the top level). Shared by suggest and hover. */
+void ti_set_enclosing_class_at_cursor(
+  TiContext *context,
+  const pm_node_t *root,
+  int cursor_byte_offset
+);
+
 #endif
