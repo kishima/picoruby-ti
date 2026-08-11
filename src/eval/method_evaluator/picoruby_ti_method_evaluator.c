@@ -308,15 +308,32 @@ argument_type_matches(
     if (actual_t_node->object_class_id == TI_CLASS_UNTYPED)
       return 1;
 
-    if (
-      contains_class_identifier(
-        expected_class_identifiers,
-        expected_class_identifier_count,
-        actual_t_node->object_class_id
-      )
-    ) {
+    /* A subclass instance satisfies a parameter declared with its
+       superclass, so walk the chain instead of comparing one identifier:
+       passing `self` (MyApp) where the signature says the base class is
+       the first line of every app. */
+    uint8_t actual_class_id = actual_t_node->object_class_id;
 
-      return 1;
+    for (int chain_depth = 0;
+         chain_depth < TI_SUPERCLASS_CHAIN_LIMIT &&
+         actual_class_id != TI_CLASS_NONE;
+         chain_depth++) {
+
+      if (
+        contains_class_identifier(
+          expected_class_identifiers,
+          expected_class_identifier_count,
+          actual_class_id
+        )
+      ) {
+
+        return 1;
+      }
+
+      if (actual_class_id < TI_CLASS_USER_BASE)
+        break;
+
+      actual_class_id = ti_resolve_superclass_id(actual_class_id);
     }
   }
 

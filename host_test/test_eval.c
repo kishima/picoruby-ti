@@ -559,6 +559,34 @@ test_inherited_builtin_argument_diagnostic(void) {
 }
 
 static void
+test_subclass_argument_satisfies_superclass_parameter(void) {
+  TiDiagnosticList diagnostics =
+    diagnose_source("class MyPin < GPIO\n"
+                    "end\n"
+                    "a = GPIO.new(1, 2)\n"
+                    "b = MyPin.new\n"
+                    "a.attach(b)");
+
+  assert(diagnostics.count == 0);
+
+  diagnostics =
+    diagnose_source("class Grand < GPIO\n"
+                    "end\n"
+                    "class Child < Grand\n"
+                    "end\n"
+                    "a = GPIO.new(1, 2)\n"
+                    "a.attach(Child.new)");
+
+  assert(diagnostics.count == 0);
+
+  diagnostics =
+    diagnose_source("a = GPIO.new(1, 2)\n"
+                    "a.attach(\"nope\")");
+
+  assert(diagnostics.count == 1);
+}
+
+static void
 test_declared_instance_variable_type_at_cursor(void) {
   const char *source = "class MyPin < GPIO\n"
                        "  def use\n"
@@ -668,6 +696,7 @@ main(void) {
   test_inherited_builtin_argument_diagnostic();
   test_declared_instance_variable_diagnostic();
   test_declared_instance_variable_type_at_cursor();
+  test_subclass_argument_satisfies_superclass_parameter();
 
   return 0;
 }
