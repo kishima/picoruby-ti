@@ -240,6 +240,93 @@ test_nested_class_methods_have_separate_owners(void) {
   assert(!find_suggestion(&suggestions, "inner_method"));
 }
 
+static void
+test_inherited_user_method_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class Base\n"
+                                                "  def base_method = 1\n"
+                                                "end\n"
+                                                "class Child < Base\n"
+                                                "  def child_method = 1\n"
+                                                "end\n"
+                                                "child = Child.new\n"
+                                                "child.");
+
+  assert(find_suggestion(&suggestions, "child_method"));
+  assert(find_suggestion(&suggestions, "base_method"));
+}
+
+static void
+test_two_level_inheritance_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class A\n"
+                                                "  def a_method = 1\n"
+                                                "end\n"
+                                                "class B < A\n"
+                                                "  def b_method = 1\n"
+                                                "end\n"
+                                                "class C < B\n"
+                                                "end\n"
+                                                "c = C.new\n"
+                                                "c.");
+
+  assert(find_suggestion(&suggestions, "a_method"));
+  assert(find_suggestion(&suggestions, "b_method"));
+}
+
+static void
+test_inherited_builtin_class_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
+                                                "  def blink = nil\n"
+                                                "end\n"
+                                                "pin = MyPin.new\n"
+                                                "pin.");
+
+  assert(find_suggestion(&suggestions, "blink"));
+  assert(find_suggestion(&suggestions, "write"));
+}
+
+static void
+test_inheritance_does_not_leak_sibling_methods(void) {
+  TiSuggestionList suggestions = suggest_source("class Base\n"
+                                                "  def base_method = 1\n"
+                                                "end\n"
+                                                "class Child < Base\n"
+                                                "end\n"
+                                                "class Other < Base\n"
+                                                "  def other_method = 1\n"
+                                                "end\n"
+                                                "child = Child.new\n"
+                                                "child.");
+
+  assert(find_suggestion(&suggestions, "base_method"));
+  assert(!find_suggestion(&suggestions, "other_method"));
+}
+
+static void
+test_self_receiver_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class Base\n"
+                                                "  def base_method = 1\n"
+                                                "end\n"
+                                                "class Child < Base\n"
+                                                "  def child_method = 1\n"
+                                                "  def use\n"
+                                                "    self.");
+
+  assert(find_suggestion(&suggestions, "child_method"));
+  assert(find_suggestion(&suggestions, "base_method"));
+}
+
+static void
+test_receiverless_inherited_method_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class Base\n"
+                                                "  def base_helper = 1\n"
+                                                "end\n"
+                                                "class Child < Base\n"
+                                                "  def use\n"
+                                                "    base_h");
+
+  assert(find_suggestion(&suggestions, "base_helper"));
+}
+
 int
 main(void) {
   test_string_suggestion();
@@ -259,6 +346,12 @@ main(void) {
   test_user_class_only_suggests_its_methods();
   test_same_method_name_in_different_classes();
   test_nested_class_methods_have_separate_owners();
+  test_inherited_user_method_suggestion();
+  test_two_level_inheritance_suggestion();
+  test_inherited_builtin_class_suggestion();
+  test_inheritance_does_not_leak_sibling_methods();
+  test_self_receiver_suggestion();
+  test_receiverless_inherited_method_suggestion();
 
   return 0;
 }

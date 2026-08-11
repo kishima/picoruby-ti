@@ -1,6 +1,8 @@
 #include "picoruby_ti_define_info.h"
 #include "picoruby_ti_arena.h"
+#include "picoruby_ti_builtin.h"
 #include "picoruby_ti_builtin_database.h"
+#include "picoruby_ti_name.h"
 #include <stddef.h>
 #include <string.h>
 
@@ -88,4 +90,57 @@ ti_get_defined_class_id(uint16_t name_id) {
   }
 
   return TI_CLASS_NONE;
+}
+
+TiDefineInfo *
+ti_get_class_define_info(uint8_t class_id) {
+  if (class_id < TI_CLASS_USER_BASE)
+    return NULL;
+
+  int user_class_index = class_id - TI_CLASS_USER_BASE;
+  int current_class_index = 0;
+
+  for (int index = 0; index < define_info_count; index++) {
+    TiDefineInfo *define_info = &define_infos[index];
+
+    if (!define_info->is_class)
+      continue;
+
+    if (current_class_index == user_class_index)
+      return define_info;
+
+    current_class_index++;
+  }
+
+  return NULL;
+}
+
+uint8_t
+ti_resolve_superclass_id(uint8_t class_id) {
+  const TiDefineInfo *define_info = ti_get_class_define_info(class_id);
+
+  if (!define_info || define_info->superclass_name_id == 0)
+    return TI_CLASS_NONE;
+
+  uint8_t user_class_id =
+    ti_get_defined_class_id(define_info->superclass_name_id);
+
+  if (user_class_id != TI_CLASS_NONE && user_class_id != class_id)
+    return user_class_id;
+
+  const TiName *superclass_name =
+    ti_get_name(define_info->superclass_name_id);
+
+  if (!superclass_name)
+    return TI_CLASS_NONE;
+
+  const uint8_t *superclass_name_bytes = ti_get_name_bytes(superclass_name);
+
+  if (!superclass_name_bytes)
+    return TI_CLASS_NONE;
+
+  return ti_get_builtin_class_id(
+    superclass_name_bytes,
+    superclass_name->byte_length
+  );
 }

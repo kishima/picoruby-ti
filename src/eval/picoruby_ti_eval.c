@@ -143,6 +143,17 @@ ti_eval_expression(TiContext *context, const pm_node_t *node, int depth) {
       (const pm_constant_read_node_t *)node
     );
 
+  case PM_SELF_NODE:
+    if (context->current_class_id >= TI_CLASS_USER_BASE) {
+      return ti_new_t(
+        context->current_class_id,
+        TI_T_FLAG_DEFINED_CLASS,
+        0
+      );
+    }
+
+    return 0;
+
   case PM_CALL_NODE:
     return ti_eval_method(context, (const pm_call_node_t *)node, depth);
 

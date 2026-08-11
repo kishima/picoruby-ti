@@ -425,28 +425,42 @@ append_define_info_suggestions(
   TiSuggestionList *out
 ) {
 
-  int user_class_index = class_id - TI_CLASS_USER_BASE;
-  int current_class_index = 0;
+  uint8_t lookup_class_id = class_id;
 
-  for (int index = 0; index < ti_get_define_info_count(); index++) {
-    TiDefineInfo *define_info = ti_get_define_info(index);
+  for (int chain_depth = 0;
+       chain_depth < TI_SUPERCLASS_CHAIN_LIMIT &&
+       lookup_class_id != TI_CLASS_NONE;
+       chain_depth++) {
 
-    if (!define_info || !define_info->is_class)
-      continue;
-
-    if (current_class_index == user_class_index) {
-      append_define_info_suggestions_for_owner(
-        context,
-        define_info->name_id,
+    if (lookup_class_id < TI_CLASS_USER_BASE) {
+      append_builtin_suggestions(
+        lookup_class_id,
+        0,
+        0,
         prefix,
         prefix_length,
+        TI_SUGGESTION_CAPACITY,
         out
       );
 
       return;
     }
 
-    current_class_index++;
+    const TiDefineInfo *class_define_info =
+      ti_get_class_define_info(lookup_class_id);
+
+    if (!class_define_info)
+      return;
+
+    append_define_info_suggestions_for_owner(
+      context,
+      class_define_info->name_id,
+      prefix,
+      prefix_length,
+      out
+    );
+
+    lookup_class_id = ti_resolve_superclass_id(lookup_class_id);
   }
 }
 
@@ -475,6 +489,33 @@ ti_collect_suggestions_at_cursor(
     return 0;
   }
 
+  /* Track the class enclosing the cursor so both receiverless lookups and
+     an explicit `self` receiver resolve against it. */
+  EnclosingClassSearch class_search = {
+    .cursor = context->source + cursor_byte_offset,
+    .target = NULL,
+    .target_length = 0,
+  };
+
+  pm_visit_node(root, find_enclosing_class_on_visit, &class_search);
+
+  if (class_search.target) {
+    uint16_t enclosing_class_name_id;
+
+    if (
+      ti_convert_constant_id(
+        context,
+        class_search.target->name,
+        &enclosing_class_name_id
+      )
+    ) {
+
+      context->current_class_name_id = enclosing_class_name_id;
+      context->current_class_id =
+        ti_get_defined_class_id(enclosing_class_name_id);
+    }
+  }
+
   if (!has_receiver) {
     if (prefix_length > 0 && prefix[0] >= 'A' && prefix[0] <= 'Z') {
       append_builtin_class_suggestions(prefix, prefix_length, out);
@@ -489,37 +530,14 @@ ti_collect_suggestions_at_cursor(
       out
     );
 
-    EnclosingClassSearch class_search = {
-      .cursor = context->source + cursor_byte_offset,
-      .target = NULL,
-      .target_length = 0,
-    };
-
-    pm_visit_node(root, find_enclosing_class_on_visit, &class_search);
-
-    if (class_search.target) {
-      uint16_t class_name_id;
-
-      if (
-        ti_convert_constant_id(
-          context,
-          class_search.target->name,
-          &class_name_id
-        )
-      ) {
-
-        uint8_t class_id = ti_get_defined_class_id(class_name_id);
-
-        if (class_id != TI_CLASS_NONE) {
-          append_define_info_suggestions(
-            context,
-            class_id,
-            prefix,
-            prefix_length,
-            out
-          );
-        }
-      }
+    if (context->current_class_id != TI_CLASS_NONE) {
+      append_define_info_suggestions(
+        context,
+        context->current_class_id,
+        prefix,
+        prefix_length,
+        out
+      );
     }
 
     append_builtin_suggestions(

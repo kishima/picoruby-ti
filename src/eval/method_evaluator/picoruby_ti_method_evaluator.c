@@ -1,5 +1,6 @@
 #include "picoruby_ti_method_evaluator.h"
 #include "picoruby_ti_builtin.h"
+#include "picoruby_ti_define_info.h"
 #include "picoruby_ti_diagnostic.h"
 #include "picoruby_ti_eval.h"
 #include "picoruby_ti_t.h"
@@ -817,11 +818,45 @@ ti_eval_method(
     return 0;
 
   if (!call_node->receiver) {
-    uint16_t defined_return_t_node_index =
-      ti_get_method_t(context->current_class_id, method_name_identifier);
+    uint8_t lookup_class_id = context->current_class_id;
 
-    if (defined_return_t_node_index != 0)
-      return defined_return_t_node_index;
+    for (int chain_depth = 0;
+         chain_depth < TI_SUPERCLASS_CHAIN_LIMIT;
+         chain_depth++) {
+
+      uint16_t defined_return_t_node_index =
+        ti_get_method_t(lookup_class_id, method_name_identifier);
+
+      if (defined_return_t_node_index != 0)
+        return defined_return_t_node_index;
+
+      /* Top-level methods live under TI_CLASS_NONE; nothing above them. */
+      if (lookup_class_id == TI_CLASS_NONE)
+        break;
+
+      if (lookup_class_id < TI_CLASS_USER_BASE) {
+        const TiBuiltinMethod *inherited_builtin_method =
+          ti_get_builtin_instance_method(
+            lookup_class_id,
+            method_name_constant->start,
+            method_name_constant->length
+          );
+
+        if (inherited_builtin_method) {
+          return evaluate_builtin_method(
+            context,
+            call_node,
+            evaluation_depth,
+            lookup_class_id,
+            inherited_builtin_method
+          );
+        }
+
+        break;
+      }
+
+      lookup_class_id = ti_resolve_superclass_id(lookup_class_id);
+    }
 
     const TiBuiltinMethod *kernel_builtin_method =
       ti_get_builtin_instance_method(
@@ -865,10 +900,43 @@ ti_eval_method(
       );
     }
 
-    return ti_get_method_t(
-      receiver_t_node->object_class_id,
-      method_name_identifier
-    );
+    uint8_t lookup_class_id = receiver_t_node->object_class_id;
+
+    for (int chain_depth = 0;
+         chain_depth < TI_SUPERCLASS_CHAIN_LIMIT &&
+         lookup_class_id != TI_CLASS_NONE;
+         chain_depth++) {
+
+      uint16_t defined_return_t_node_index =
+        ti_get_method_t(lookup_class_id, method_name_identifier);
+
+      if (defined_return_t_node_index != 0)
+        return defined_return_t_node_index;
+
+      if (lookup_class_id < TI_CLASS_USER_BASE) {
+        const TiBuiltinMethod *inherited_builtin_method =
+          ti_get_builtin_instance_method(
+            lookup_class_id,
+            method_name_constant->start,
+            method_name_constant->length
+          );
+
+        if (!inherited_builtin_method)
+          return 0;
+
+        return evaluate_builtin_method(
+          context,
+          call_node,
+          evaluation_depth,
+          lookup_class_id,
+          inherited_builtin_method
+        );
+      }
+
+      lookup_class_id = ti_resolve_superclass_id(lookup_class_id);
+    }
+
+    return 0;
   }
 
   const TiBuiltinMethod *builtin_method;

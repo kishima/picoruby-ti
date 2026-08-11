@@ -528,6 +528,37 @@ test_unknown_return(void) {
 }
 
 static void
+test_inherited_method_return_type(void) {
+  TiDiagnosticList diagnostics =
+    diagnose_source("class Base\n"
+                    "  def label\n"
+                    "    \"x\"\n"
+                    "  end\n"
+                    "end\n"
+                    "class Child < Base\n"
+                    "end\n"
+                    "child = Child.new\n"
+                    "1 + child.label");
+
+  assert(diagnostics.count == 1);
+}
+
+static void
+test_inherited_builtin_argument_diagnostic(void) {
+  TiDiagnosticList diagnostics =
+    diagnose_source("class MyPin < GPIO\n"
+                    "end\n"
+                    "pin = MyPin.new\n"
+                    "pin.write(\"high\")");
+
+  assert(diagnostics.count == 1);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "type mismatch: expected Integer, but got String for GPIO.write"
+  ) == 0);
+}
+
+static void
 test_binding_overflow(void) {
   size_t capacity = 24000;
   char *source = malloc(capacity);
@@ -598,6 +629,8 @@ main(void) {
   test_union_capacity();
   test_unknown_return();
   test_binding_overflow();
+  test_inherited_method_return_type();
+  test_inherited_builtin_argument_diagnostic();
 
   return 0;
 }
