@@ -6,7 +6,15 @@ module TiDatabaseGenerator
     instance_method_start_index: "uint16_t",
     instance_method_count: "uint16_t",
     static_method_start_index: "uint16_t",
-    static_method_count: "uint16_t"
+    static_method_count: "uint16_t",
+    instance_variable_start_index: "uint16_t",
+    instance_variable_count: "uint16_t"
+  }.freeze
+
+  BUILTIN_INSTANCE_VARIABLE_FIELD_DEFINITIONS = {
+    name_offset: "uint16_t",
+    class_identifier: "uint8_t",
+    union_index: "uint16_t"
   }.freeze
 
   BUILTIN_METHOD_FIELD_DEFINITIONS = {
@@ -42,11 +50,17 @@ module TiDatabaseGenerator
   CollectedClass = Struct.new(
     :full_name, :declaration_kind, :declarations,
     :direct_ancestors, :instance_methods, :static_methods,
+    :instance_variables,
     keyword_init: true
   )
 
   CollectedMethod = Struct.new(
     :name, :method_types, :comment, :origin_class_full_name,
+    keyword_init: true
+  )
+
+  CollectedInstanceVariable = Struct.new(
+    :name, :type,
     keyword_init: true
   )
 
@@ -81,6 +95,10 @@ module TiDatabaseGenerator
 
   BuiltinArgumentRecord = Struct.new(
     *BUILTIN_ARGUMENT_FIELD_DEFINITIONS.keys, keyword_init: true
+  )
+
+  BuiltinInstanceVariableRecord = Struct.new(
+    *BUILTIN_INSTANCE_VARIABLE_FIELD_DEFINITIONS.keys, keyword_init: true
   )
 
   module ClassIdentifierCollection

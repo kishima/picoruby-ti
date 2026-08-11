@@ -559,6 +559,18 @@ test_inherited_builtin_argument_diagnostic(void) {
 }
 
 static void
+test_declared_instance_variable_diagnostic(void) {
+  TiDiagnosticList diagnostics =
+    diagnose_source("class MyPin < GPIO\n"
+                    "  def use\n"
+                    "    1 + @label\n"
+                    "  end\n"
+                    "end");
+
+  assert(diagnostics.count == 1);
+}
+
+static void
 test_binding_overflow(void) {
   size_t capacity = 24000;
   char *source = malloc(capacity);
@@ -631,6 +643,7 @@ main(void) {
   test_binding_overflow();
   test_inherited_method_return_type();
   test_inherited_builtin_argument_diagnostic();
+  test_declared_instance_variable_diagnostic();
 
   return 0;
 }

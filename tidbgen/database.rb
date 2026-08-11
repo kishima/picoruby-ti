@@ -3,6 +3,7 @@
 module TiDatabaseGenerator
   BuiltinDatabase = Struct.new(
     :builtin_classes, :builtin_methods, :builtin_arguments,
+    :builtin_instance_variables,
     :class_identifiers_by_full_name,
     :enumeration_names, :name_pool, :signature_pool,
     :document_pool, :union_pool,

@@ -108,7 +108,8 @@ module TiDatabaseGenerator
           declarations: [],
           direct_ancestors: [],
           instance_methods: {},
-          static_methods: {}
+          static_methods: {},
+          instance_variables: {}
         )
 
       @collected_classes[full_class_name] = collected_class
@@ -165,10 +166,23 @@ module TiDatabaseGenerator
         when RBS::AST::Members::MethodDefinition
           collect_method_if_public(collected_class:, method_member: member, visibility:)
 
+        when RBS::AST::Members::InstanceVariable
+          collect_instance_variable(collected_class:, instance_variable_member: member)
+
         when RBS::AST::Members::Alias
           collect_method_alias(collected_class:, method_alias_member: member)
         end
       end
+    end
+
+    def collect_instance_variable(collected_class:, instance_variable_member:)
+      instance_variable_name = instance_variable_member.name.to_s
+
+      collected_class.instance_variables[instance_variable_name] ||=
+        CollectedInstanceVariable.new(
+          name: instance_variable_name,
+          type: instance_variable_member.type
+        )
     end
 
     def collect_ancestor(collected_class:, ancestor_member:)
