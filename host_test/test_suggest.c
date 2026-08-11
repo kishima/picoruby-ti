@@ -316,6 +316,47 @@ test_self_receiver_suggestion(void) {
 }
 
 static void
+test_declared_instance_variable_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
+                                                "  def use\n"
+                                                "    @pin.ab");
+
+  assert(find_suggestion(&suggestions, "abs"));
+}
+
+static void
+test_declared_instance_variable_via_user_chain(void) {
+  TiSuggestionList suggestions = suggest_source("class Mid < GPIO\n"
+                                                "end\n"
+                                                "class MyPin < Mid\n"
+                                                "  def use\n"
+                                                "    @pin.ab");
+
+  assert(find_suggestion(&suggestions, "abs"));
+}
+
+static void
+test_assigned_instance_variable_overrides_declaration(void) {
+  TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
+                                                "  def set\n"
+                                                "    @pin = \"str\"\n"
+                                                "  end\n"
+                                                "  def use\n"
+                                                "    @pin.up");
+
+  assert(find_suggestion(&suggestions, "upcase"));
+}
+
+static void
+test_undeclared_instance_variable_has_no_suggestions(void) {
+  TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
+                                                "  def use\n"
+                                                "    @nope.");
+
+  assert(suggestions.count == 0);
+}
+
+static void
 test_receiverless_inherited_method_suggestion(void) {
   TiSuggestionList suggestions = suggest_source("class Base\n"
                                                 "  def base_helper = 1\n"
@@ -352,6 +393,10 @@ main(void) {
   test_inheritance_does_not_leak_sibling_methods();
   test_self_receiver_suggestion();
   test_receiverless_inherited_method_suggestion();
+  test_declared_instance_variable_suggestion();
+  test_declared_instance_variable_via_user_chain();
+  test_assigned_instance_variable_overrides_declaration();
+  test_undeclared_instance_variable_has_no_suggestions();
 
   return 0;
 }

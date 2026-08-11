@@ -46,6 +46,7 @@ module TiDatabaseGenerator
         builtin_classes: @builtin_classes,
         builtin_methods: @builtin_methods,
         builtin_arguments: @builtin_arguments,
+        builtin_instance_variables: @builtin_instance_variables,
         class_identifiers_by_full_name: @class_identifiers_by_full_name,
         enumeration_names: @enumeration_names,
         name_pool: @name_pool,
@@ -108,6 +109,7 @@ module TiDatabaseGenerator
 
       @builtin_methods = []
       @builtin_arguments = []
+      @builtin_instance_variables = []
 
       @ordered_class_names.each do |full_class_name|
         class_identifier = @class_identifiers_by_full_name[full_class_name]
@@ -132,6 +134,11 @@ module TiDatabaseGenerator
           builtin_class:
         )
 
+        append_builtin_instance_variables_and_set_class_range(
+          collected_class:,
+          builtin_class:
+        )
+
         @builtin_classes[class_identifier] = builtin_class
       end
 
@@ -142,6 +149,11 @@ module TiDatabaseGenerator
       if @builtin_arguments.length > 65_535
         raise "argument table exceeds 65535 entries (#{@builtin_arguments.length})"
       end
+
+      if @builtin_instance_variables.length > 65_535
+        raise "instance variable table exceeds 65535 entries " \
+              "(#{@builtin_instance_variables.length})"
+      end
     end
 
     def build_empty_builtin_class
@@ -150,8 +162,93 @@ module TiDatabaseGenerator
         instance_method_start_index: 0,
         instance_method_count: 0,
         static_method_start_index: 0,
-        static_method_count: 0
+        static_method_count: 0,
+        instance_variable_start_index: 0,
+        instance_variable_count: 0
       )
+    end
+
+    def append_builtin_instance_variables_and_set_class_range(
+      collected_class:,
+      builtin_class:
+    )
+
+      collected_instance_variables_by_name = {}
+
+      collect_instance_variables_from_class_and_ancestors(
+        current_collected_class: collected_class,
+        substitution: RBS::Substitution.build([], []),
+        collected_instance_variables_by_name:,
+        visited_class_full_names: {}
+      )
+
+      builtin_class.instance_variable_start_index =
+        @builtin_instance_variables.length
+
+      collected_instance_variables_by_name.each do |name, resolved_type|
+        error_context = "#{collected_class.full_name} #{name}"
+
+        class_identifiers =
+          fallback_to_untyped_if_oversized_union(
+            class_identifiers: resolved_type.class_identifiers,
+            error_context:
+          )
+
+        @builtin_instance_variables << BuiltinInstanceVariableRecord.new(
+          name_offset: @name_pool.add_string_and_return_offset(string: name),
+          class_identifier: class_identifiers.first || 0,
+          union_index: @union_pool.resolve_union_index(
+            class_identifiers:,
+            error_context:
+          )
+        )
+      end
+
+      builtin_class.instance_variable_count =
+        collected_instance_variables_by_name.length
+    end
+
+    def collect_instance_variables_from_class_and_ancestors(
+      current_collected_class:,
+      substitution:,
+      collected_instance_variables_by_name:,
+      visited_class_full_names:
+    )
+
+      return if visited_class_full_names[current_collected_class.full_name]
+
+      visited_class_full_names[current_collected_class.full_name] = true
+
+      current_collected_class.instance_variables.each do |name, instance_variable|
+        next if collected_instance_variables_by_name.key?(name)
+
+        collected_instance_variables_by_name[name] =
+          @type_resolver.resolve(
+            signature_type: instance_variable.type.sub(substitution),
+            owner_full_name: current_collected_class.full_name
+          )
+      end
+
+      current_collected_class.direct_ancestors.each do |ancestor|
+        next if ancestor[:kind] == :extend
+
+        collected_ancestor_class = @collected_classes[ancestor[:full_name]]
+        next unless collected_ancestor_class
+
+        ancestor_substitution =
+          build_ancestor_substitution(
+            collected_ancestor_class:,
+            type_arguments: ancestor[:type_arguments],
+            substitution:
+          )
+
+        collect_instance_variables_from_class_and_ancestors(
+          current_collected_class: collected_ancestor_class,
+          substitution: ancestor_substitution,
+          collected_instance_variables_by_name:,
+          visited_class_full_names:
+        )
+      end
     end
 
     def append_builtin_methods_and_set_class_method_range(

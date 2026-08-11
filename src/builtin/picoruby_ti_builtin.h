@@ -6,6 +6,13 @@
 #include <stdint.h>
 
 uint8_t ti_get_builtin_class_id(const uint8_t *name, size_t length);
+/* Type declared for an instance variable in the RBS signatures ("@gfx" form,
+   leading '@' included). TI_CLASS_NONE when the class declares none. */
+uint8_t ti_get_builtin_instance_variable_class(
+  uint8_t class_id,
+  const uint8_t *instance_variable_name,
+  size_t instance_variable_name_length
+);
 const TiBuiltinMethod *ti_get_builtin_instance_method(
   uint8_t class_id,
   const uint8_t *name,

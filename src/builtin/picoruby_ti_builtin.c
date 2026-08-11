@@ -41,6 +41,52 @@ ti_get_builtin_class_id(
   return TI_CLASS_NONE;
 }
 
+uint8_t
+ti_get_builtin_instance_variable_class(
+  uint8_t class_id,
+  const uint8_t *instance_variable_name,
+  size_t instance_variable_name_length
+) {
+
+  if (
+    class_id == TI_CLASS_NONE ||
+    class_id >= ti_builtin_class_count ||
+    !instance_variable_name ||
+    instance_variable_name_length == 0
+  ) {
+
+    return TI_CLASS_NONE;
+  }
+
+  const TiBuiltinClass *builtin_class = &ti_builtin_classes[class_id];
+
+  for (uint16_t index = 0;
+       index < builtin_class->instance_variable_count;
+       index++) {
+
+    const TiBuiltinInstanceVariable *instance_variable =
+      &ti_builtin_instance_variables[
+        builtin_class->instance_variable_start_index + index
+      ];
+
+    const char *builtin_instance_variable_name =
+      &ti_builtin_name_pool[instance_variable->name_offset];
+
+    if (
+      builtin_name_matches(
+        builtin_instance_variable_name,
+        instance_variable_name,
+        instance_variable_name_length
+      )
+    ) {
+
+      return instance_variable->class_identifier;
+    }
+  }
+
+  return TI_CLASS_NONE;
+}
+
 static void
 get_builtin_method_range(
   uint8_t class_id,
