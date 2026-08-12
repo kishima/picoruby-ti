@@ -12,7 +12,8 @@ GENERATED_OBJECT := \
 TEST_OBJECTS := \
   $(OBJECT_ROOT)/test_builtin.o \
   $(OBJECT_ROOT)/test_eval.o \
-  $(OBJECT_ROOT)/test_suggest.o
+  $(OBJECT_ROOT)/test_suggest.o \
+  $(OBJECT_ROOT)/test_call_context.o
 DEPENDENCIES := \
   $(ENGINE_OBJECTS:.o=.d) \
   $(GENERATED_OBJECT:.o=.d) \
@@ -24,13 +25,14 @@ CFLAGS := -std=c11 -Wall -Wextra -Werror -MMD -MP $(INCLUDE_FLAGS)
 
 .PHONY: all test clean
 
-all: test_builtin test_eval test_suggest
+all: test_builtin test_eval test_suggest test_call_context
 
 test:
 	$(MAKE) all
 	./test_builtin
 	./test_eval
 	./test_suggest
+	./test_call_context
 
 $(PRISM_ROOT)/build/libprism.a:
 	$(MAKE) -C $(PRISM_ROOT) static
@@ -63,7 +65,14 @@ test_suggest: \
   $(PRISM_ROOT)/build/libprism.a
 	$(CC) $^ -o $@
 
+test_call_context: \
+  $(OBJECT_ROOT)/test_call_context.o \
+  $(ENGINE_OBJECTS) \
+  $(GENERATED_OBJECT) \
+  $(PRISM_ROOT)/build/libprism.a
+	$(CC) $^ -o $@
+
 clean:
-	$(RM) -r $(OBJECT_ROOT) test_builtin test_eval test_suggest
+	$(RM) -r $(OBJECT_ROOT) test_builtin test_eval test_suggest test_call_context
 
 -include $(DEPENDENCIES)

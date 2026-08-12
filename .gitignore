@@ -6,4 +6,5 @@
 /host_test/test_builtin
 /host_test/test_eval
 /host_test/test_suggest
+/host_test/test_call_context
 sample.rb
