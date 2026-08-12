@@ -59,6 +59,20 @@ module TiDatabaseGenerator
 
     private
 
+    # The database keeps only the first line of a doc comment.
+    #
+    # What the database is read for is a list: the editor shows one line per
+    # candidate, so a summary is all it can display. Longer text -- a
+    # paragraph of explanation, an example -- is worth writing, but it does
+    # not belong in a table that lives in the firmware's flash: the string
+    # pools are 65535 bytes each, and a handful of examples would fill the
+    # document pool on their own. Writing the summary on the first line and
+    # the long form below it lets both live in one place in the signatures,
+    # with only the summary compiled in.
+    def summary_line_of(comment:)
+      comment.to_s.lines.first.to_s.strip
+    end
+
     def validate_required_fixed_classes_present!
       fixed_class_names_missing_from_collected_classes =
         FIXED_CLASS_ENUMERATION_NAMES.keys.reject do |fixed_class_name|
@@ -209,7 +223,7 @@ module TiDatabaseGenerator
             string: "#{name}: #{collected_constant.type}"
           ),
           document_offset: @document_pool.add_string_and_return_offset(
-            string: collected_constant.comment
+            string: summary_line_of(comment: collected_constant.comment)
           ),
           class_identifier: class_identifiers.first || 0,
           union_index: @union_pool.resolve_union_index(
@@ -529,7 +543,7 @@ module TiDatabaseGenerator
           string: @signature_renderer.render_method_signature(collected_method:)
         ),
         document_offset: @document_pool.add_string_and_return_offset(
-          string: collected_method.comment
+          string: summary_line_of(comment: collected_method.comment)
         ),
         argument_start_index:,
         argument_count:,
