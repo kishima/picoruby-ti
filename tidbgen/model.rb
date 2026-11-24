@@ -27,18 +27,26 @@ module TiDatabaseGenerator
   # TI_BUILTIN_DOCUMENT_OFFSET (the generated header).
   DOCUMENT_POOL_BYTE_LIMIT = 0xFF_FFFF
 
+  # The signature pool is the next to fill (one line per method, and
+  # optional and keyword arguments make the lines longer), so its offsets are
+  # 24 bits as well: signature_offset_low and signature_offset_high, read
+  # with TI_BUILTIN_SIGNATURE_OFFSET. No padding was left for this byte, so a
+  # method record is 20 bytes (was 18) and a constant record 12 (was 10).
+  SIGNATURE_POOL_BYTE_LIMIT = 0xFF_FFFF
+
   BUILTIN_CONSTANT_FIELD_DEFINITIONS = {
     name_offset: "uint16_t",
-    signature_offset: "uint16_t",
+    signature_offset_low: "uint16_t",
     document_offset_low: "uint16_t",
     class_identifier: "uint8_t",
     document_offset_high: "uint8_t",
-    union_index: "uint16_t"
+    union_index: "uint16_t",
+    signature_offset_high: "uint8_t"
   }.freeze
 
   BUILTIN_METHOD_FIELD_DEFINITIONS = {
     name_offset: "uint16_t",
-    signature_offset: "uint16_t",
+    signature_offset_low: "uint16_t",
     document_offset_low: "uint16_t",
     argument_start_index: "uint16_t",
     argument_count: "uint8_t",
@@ -48,7 +56,8 @@ module TiDatabaseGenerator
     return_union_index: "uint16_t",
     array_variant_union_index: "uint16_t",
     block_parameter_class_identifier: "uint8_t",
-    origin_class_identifier: "uint8_t"
+    origin_class_identifier: "uint8_t",
+    signature_offset_high: "uint8_t"
   }.freeze
 
   BUILTIN_ARGUMENT_FIELD_DEFINITIONS = {

@@ -109,13 +109,17 @@ module TiDatabaseGenerator
         extern const uint16_t ti_builtin_constant_count;
         extern const uint16_t ti_builtin_union_count;
         extern const uint16_t ti_builtin_name_pool_size;
-        extern const uint16_t ti_builtin_signature_pool_size;
+        extern const uint32_t ti_builtin_signature_pool_size;
         extern const uint32_t ti_builtin_document_pool_size;
 
         /* Where an entry's summary line starts in ti_builtin_document_pool:
            24 bits, kept as two fields (TiBuiltinMethod, TiBuiltinConstant). */
         #define TI_BUILTIN_DOCUMENT_OFFSET(entry) \\
           (((uint32_t)(entry)->document_offset_high << 16) | (entry)->document_offset_low)
+
+        /* The same for the signature line in ti_builtin_signature_pool. */
+        #define TI_BUILTIN_SIGNATURE_OFFSET(entry) \\
+          (((uint32_t)(entry)->signature_offset_high << 16) | (entry)->signature_offset_low)
 
         #endif
       HEADER
@@ -225,7 +229,7 @@ module TiDatabaseGenerator
         const uint16_t ti_builtin_constant_count = #{@builtin_database.builtin_constants.length};
         const uint16_t ti_builtin_union_count = #{@builtin_database.union_pool.union_entries.length};
         const uint16_t ti_builtin_name_pool_size = #{@builtin_database.name_pool.binary_string.bytesize};
-        const uint16_t ti_builtin_signature_pool_size = #{@builtin_database.signature_pool.binary_string.bytesize};
+        const uint32_t ti_builtin_signature_pool_size = #{@builtin_database.signature_pool.binary_string.bytesize};
         const uint32_t ti_builtin_document_pool_size = #{@builtin_database.document_pool.binary_string.bytesize};
       CONSTANTS
     end

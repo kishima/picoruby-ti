@@ -175,7 +175,7 @@ ti_get_builtin_constant_name(const TiBuiltinConstant *builtin_constant) {
 
 const char *
 ti_get_builtin_constant_signature(const TiBuiltinConstant *builtin_constant) {
-  return &ti_builtin_signature_pool[builtin_constant->signature_offset];
+  return &ti_builtin_signature_pool[TI_BUILTIN_SIGNATURE_OFFSET(builtin_constant)];
 }
 
 const char *
@@ -385,7 +385,7 @@ ti_get_builtin_method_name(const TiBuiltinMethod *builtin_method) {
 
 const char *
 ti_get_builtin_signature(const TiBuiltinMethod *builtin_method) {
-  return &ti_builtin_signature_pool[builtin_method->signature_offset];
+  return &ti_builtin_signature_pool[TI_BUILTIN_SIGNATURE_OFFSET(builtin_method)];
 }
 
 const char *

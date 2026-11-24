@@ -35,7 +35,10 @@ module TiDatabaseGenerator
 
       @signature_renderer = SignatureRenderer.new
       @name_pool = StringPool.new(pool_name: "name")
-      @signature_pool = StringPool.new(pool_name: "signature")
+      @signature_pool = StringPool.new(
+        pool_name: "signature",
+        byte_limit: SIGNATURE_POOL_BYTE_LIMIT
+      )
       @document_pool = StringPool.new(
         pool_name: "document",
         byte_limit: DOCUMENT_POOL_BYTE_LIMIT
@@ -225,18 +228,22 @@ module TiDatabaseGenerator
             string: summary_line_of(comment: collected_constant.comment)
           )
 
+        constant_signature_offset =
+          @signature_pool.add_string_and_return_offset(
+            string: "#{name}: #{collected_constant.type}"
+          )
+
         @builtin_constants << BuiltinConstantRecord.new(
           name_offset: @name_pool.add_string_and_return_offset(string: name),
-          signature_offset: @signature_pool.add_string_and_return_offset(
-            string: "#{name}: #{collected_constant.type}"
-          ),
+          signature_offset_low: constant_signature_offset & 0xFFFF,
           document_offset_low: constant_document_offset & 0xFFFF,
           class_identifier: class_identifiers.first || 0,
           document_offset_high: constant_document_offset >> 16,
           union_index: @union_pool.resolve_union_index(
             class_identifiers:,
             error_context:
-          )
+          ),
+          signature_offset_high: constant_signature_offset >> 16
         )
       end
 
@@ -549,11 +556,14 @@ module TiDatabaseGenerator
           string: summary_line_of(comment: collected_method.comment)
         )
 
+      method_signature_offset =
+        @signature_pool.add_string_and_return_offset(
+          string: @signature_renderer.render_method_signature(collected_method:)
+        )
+
       BuiltinMethodRecord.new(
         name_offset: @name_pool.add_string_and_return_offset(string: collected_method.name),
-        signature_offset: @signature_pool.add_string_and_return_offset(
-          string: @signature_renderer.render_method_signature(collected_method:)
-        ),
+        signature_offset_low: method_signature_offset & 0xFFFF,
         document_offset_low: method_document_offset & 0xFFFF,
         argument_start_index:,
         argument_count:,
@@ -573,7 +583,8 @@ module TiDatabaseGenerator
           resolved_collected_method.block_parameter_class_identifier,
         origin_class_identifier: @class_identifiers_by_full_name.fetch(
           collected_method.origin_class_full_name
-        )
+        ),
+        signature_offset_high: method_signature_offset >> 16
       )
     end
 

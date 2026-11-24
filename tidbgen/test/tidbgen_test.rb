@@ -441,7 +441,12 @@ class TiDatabaseGeneratorTest < Minitest::Test
       assert_equal "uint16_t", fields.fetch(:document_offset_low)
       assert_equal "uint8_t", fields.fetch(:document_offset_high)
       refute fields.key?(:document_offset)
+      # the signature pool is addressed the same way
+      assert_equal "uint16_t", fields.fetch(:signature_offset_low)
+      assert_equal "uint8_t", fields.fetch(:signature_offset_high)
+      refute fields.key?(:signature_offset)
     end
+    assert_equal 0xFF_FFFF, TiDatabaseGenerator::SIGNATURE_POOL_BYTE_LIMIT
   end
 
 end

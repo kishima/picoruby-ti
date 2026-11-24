@@ -133,14 +133,16 @@ test_pool_boundaries(void) {
 
   /* The high byte of the 24-bit document offset sits in what was padding:
      the tables are the size they were with 16-bit offsets. */
-  _Static_assert(sizeof(TiBuiltinMethod) == 18, "TiBuiltinMethod grew");
-  _Static_assert(sizeof(TiBuiltinConstant) == 10, "TiBuiltinConstant grew");
+  _Static_assert(sizeof(TiBuiltinMethod) == 20, "TiBuiltinMethod is not the size the format says");
+  _Static_assert(sizeof(TiBuiltinConstant) == 12, "TiBuiltinConstant is not the size the format says");
 
   for (uint16_t index = 0; index < ti_builtin_method_count; index++) {
     const TiBuiltinMethod *method = &ti_builtin_methods[index];
 
     assert(method->name_offset < ti_builtin_name_pool_size);
-    assert(method->signature_offset < ti_builtin_signature_pool_size);
+    const uint32_t signature_offset = TI_BUILTIN_SIGNATURE_OFFSET(method);
+
+    assert(signature_offset < ti_builtin_signature_pool_size);
     const uint32_t document_offset = TI_BUILTIN_DOCUMENT_OFFSET(method);
 
     assert(document_offset < ti_builtin_document_pool_size);
@@ -150,9 +152,9 @@ test_pool_boundaries(void) {
       ti_builtin_name_pool_size - method->name_offset
     ));
     assert(memchr(
-      ti_builtin_signature_pool + method->signature_offset,
+      ti_builtin_signature_pool + signature_offset,
       '\0',
-      ti_builtin_signature_pool_size - method->signature_offset
+      ti_builtin_signature_pool_size - signature_offset
     ));
     assert(memchr(
       ti_builtin_document_pool + document_offset,
