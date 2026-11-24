@@ -342,6 +342,62 @@ test_dot_receiver_offers_no_constants(void) {
 }
 
 static void
+test_nested_class_suggestion(void) {
+  /* "A::B." offers the static methods of the nested class */
+  TiSuggestionList suggestions = suggest_source("TiNest::Box.");
+  assert(find_suggestion(&suggestions, "new"));
+  assert(find_suggestion(&suggestions, "open"));
+  assert(!find_suggestion(&suggestions, "MAX"));
+  assert(!find_suggestion(&suggestions, "Lid"));
+
+  /* the instance methods of what A::B.new returns */
+  suggestions = suggest_source("b = TiNest::Box.new(1)\nb.");
+  assert(find_suggestion(&suggestions, "resize"));
+  assert(find_suggestion(&suggestions, "label"));
+
+  suggestions = suggest_source("b = TiNest::Box.new(1)\nb.re");
+  assert(find_suggestion(&suggestions, "resize"));
+  assert(!find_suggestion(&suggestions, "label"));
+
+  suggestions = suggest_source("l = TiNest::Box::Lid.new\nl.");
+  assert(find_suggestion(&suggestions, "close"));
+}
+
+static void
+test_nested_class_scope_suggestion(void) {
+  /* "A::" offers the constants, the static methods, then the classes
+     nested directly in A */
+  TiSuggestionList suggestions = suggest_source("x = TiNest::");
+  assert(find_suggestion(&suggestions, "SIZE"));
+  assert(find_suggestion(&suggestions, "make"));
+
+  const TiSuggestion *box = find_suggestion(&suggestions, "Box");
+  assert(box);
+  assert(strcmp(box->detail, "TiNest::Box") == 0);
+  assert(find_suggestion(&suggestions, "Bag"));
+  assert(!find_suggestion(&suggestions, "Lid"));
+  assert(!find_suggestion(&suggestions, "Box::Lid"));
+  /* the nested classes come after everything offered before */
+  assert(strcmp(suggestions.items[suggestions.count - 1].contents, "Bag") == 0 ||
+         strcmp(suggestions.items[suggestions.count - 1].contents, "Box") == 0);
+
+  suggestions = suggest_source("x = TiNest::Bo");
+  assert(suggestions.count == 1);
+  assert(strcmp(suggestions.items[0].contents, "Box") == 0);
+
+  /* "A::B::" */
+  suggestions = suggest_source("x = TiNest::Box::");
+  assert(find_suggestion(&suggestions, "MAX"));
+  assert(find_suggestion(&suggestions, "new"));
+  assert(find_suggestion(&suggestions, "Lid"));
+
+  /* GPIO has no nested class: what it offered before, unchanged */
+  suggestions = suggest_source("x = GPIO::L");
+  assert(suggestions.count == 1);
+  assert(strcmp(suggestions.items[0].contents, "LOW") == 0);
+}
+
+static void
 test_declared_instance_variable_suggestion(void) {
   TiSuggestionList suggestions = suggest_source("class MyPin < GPIO\n"
                                                 "  def use\n"
@@ -396,6 +452,8 @@ test_receiverless_inherited_method_suggestion(void) {
 
 int
 main(void) {
+  test_nested_class_suggestion();
+  test_nested_class_scope_suggestion();
   test_string_suggestion();
   test_prefix_suggestion();
   test_unknown_receiver();

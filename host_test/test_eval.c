@@ -630,6 +630,150 @@ test_declared_instance_variable_diagnostic(void) {
   assert(diagnostics.count == 1);
 }
 
+/* The type hovering the last occurrence of `name` in source shows, or "". */
+static const char *
+type_of_last(const char *source, const char *name, TiHoverInfo *hover_info) {
+  const char *target = NULL;
+  const char *found = source;
+
+  while ((found = strstr(found, name)) != NULL) {
+    target = found;
+    found++;
+  }
+
+  assert(target);
+
+  if (!find_hover(source, (int)(target - source), hover_info))
+    return "";
+
+  return hover_info->type_name;
+}
+
+static void
+test_nested_class_path(void) {
+  TiHoverInfo hover_info;
+
+  /* two segments: .new and a static method */
+  assert(strcmp(type_of_last("b = TiNest::Box.new(1)\nb\n", "b", &hover_info),
+                "TiNest::Box") == 0);
+  assert(strcmp(type_of_last("b = TiNest::Box.open(1)\nb\n", "b", &hover_info),
+                "TiNest::Box") == 0);
+  /* a module function on a nested receiver */
+  assert(strcmp(type_of_last("b = TiNest.make(:a)\nb\n", "b", &hover_info),
+                "TiNest::Box") == 0);
+  /* three segments */
+  assert(strcmp(
+    type_of_last("l = TiNest::Box::Lid.new\nl\n", "l", &hover_info),
+    "TiNest::Box::Lid") == 0);
+  /* a leading :: */
+  assert(strcmp(type_of_last("b = ::TiNest::Box.new(1)\nb\n", "b", &hover_info),
+                "TiNest::Box") == 0);
+  /* the class held in a variable */
+  assert(strcmp(
+    type_of_last("k = TiNest::Box\nb = k.new(1)\nb\n", "b", &hover_info),
+    "TiNest::Box") == 0);
+  /* chained to an instance method */
+  assert(strcmp(
+    type_of_last("s = TiNest::Box.new(1).size\ns\n", "s", &hover_info),
+    "Integer") == 0);
+}
+
+static void
+test_nested_class_constants(void) {
+  TiHoverInfo hover_info;
+
+  /* Klass::CONST stays as it was */
+  assert(strcmp(type_of_last("v = GPIO::LOW\nv\n", "v", &hover_info),
+                "Integer") == 0);
+  assert(strcmp(type_of_last("v = TiNest::SIZE\nv\n", "v", &hover_info),
+                "Integer") == 0);
+  /* a constant of a nested class, and through a leading :: */
+  assert(strcmp(type_of_last("v = TiNest::Box::MAX\nv\n", "v", &hover_info),
+                "Integer") == 0);
+  assert(strcmp(type_of_last("v = ::GPIO::LOW\nv\n", "v", &hover_info),
+                "Integer") == 0);
+}
+
+static void
+test_nested_class_path_unknown(void) {
+  TiHoverInfo hover_info;
+
+  /* no such class or constant: untyped, no diagnostic */
+  assert(strcmp(type_of_last("b = TiNest::Nope.new(1)\nb\n", "b", &hover_info),
+                "") == 0);
+  assert(strcmp(type_of_last("b = TiNest::Box::Nope\nb\n", "b", &hover_info),
+                "") == 0);
+  assert(strcmp(type_of_last("b = Nope::Box.new(1)\nb\n", "b", &hover_info),
+                "") == 0);
+  /* a prefix of a real name is not that name */
+  assert(strcmp(type_of_last("b = Nest::Box.new(1)\nb\n", "b", &hover_info),
+                "") == 0);
+  assert(strcmp(type_of_last("b = TiNest::Bo.new(1)\nb\n", "b", &hover_info),
+                "") == 0);
+  /* a path whose root is not a constant */
+  assert(strcmp(type_of_last("b = foo::Box.new(1)\nb\n", "b", &hover_info),
+                "") == 0);
+  /* longer than any database class: untyped, and nothing breaks */
+  assert(strcmp(type_of_last(
+    "b = A::B::C::D::E::F::G::H::I::J::K::L::TiNest::Box.new(1)\nb\n",
+    "b", &hover_info), "") == 0);
+  assert(strcmp(type_of_last(
+    "b = ::TiNest::Box::Lid::A::B::C::D::E::F::G::H.new\nb\n",
+    "b", &hover_info), "") == 0);
+
+  TiDiagnosticList diagnostics =
+    diagnose_source("TiNest::Nope.new(1, 2, 3)\n"
+                    "A::B::C::D::E::F::G::H::I::J.new(1)\n");
+  assert(diagnostics.count == 0);
+}
+
+static void
+test_nested_class_user_class_unchanged(void) {
+  TiHoverInfo hover_info;
+
+  /* user-defined nested classes stay as they were: untyped through a path */
+  assert(strcmp(type_of_last("module M\n  class C\n  end\nend\n"
+                             "c = M::C.new\nc\n", "c", &hover_info),
+                "") == 0);
+}
+
+static void
+test_nested_class_diagnostic(void) {
+  TiDiagnosticList diagnostics =
+    diagnose_source("b = TiNest::Box.new(1)\nb.resize(1, 2)");
+  assert(diagnostics.count == 1);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "too many arguments for TiNest::Box.resize"
+  ) == 0);
+
+  diagnostics = diagnose_source("b = TiNest::Box.new(1)\nb.resize(1)");
+  assert(diagnostics.count == 0);
+
+  /* static methods: .new, a module function, a three-segment receiver */
+  diagnostics = diagnose_source("TiNest::Box.new(1, 2)");
+  assert(diagnostics.count == 1);
+
+  diagnostics = diagnose_source("TiNest.make(:a, 1, 2)");
+  assert(diagnostics.count == 1);
+
+  diagnostics = diagnose_source("TiNest::Box.open(\"x\")");
+  assert(diagnostics.count == 1);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "type mismatch: expected Integer, but got String for TiNest::Box.open"
+  ) == 0);
+
+  diagnostics = diagnose_source("TiNest::Box::Lid.new.close(1)");
+  assert(diagnostics.count == 1);
+
+  /* a nested constant as an argument */
+  diagnostics = diagnose_source("\"x\".tr(TiNest::Box::MAX, \"a\")");
+  assert(diagnostics.count == 1);
+  diagnostics = diagnose_source("x = 1 + TiNest::Box::MAX");
+  assert(diagnostics.count == 0);
+}
+
 static void
 test_binding_overflow(void) {
   size_t capacity = 24000;
@@ -668,6 +812,11 @@ test_binding_overflow(void) {
 
 int
 main(void) {
+  test_nested_class_path();
+  test_nested_class_constants();
+  test_nested_class_path_unknown();
+  test_nested_class_user_class_unchanged();
+  test_nested_class_diagnostic();
   test_builtin_argument_type_diagnostic();
   test_unknown_argument_has_no_diagnostic();
   test_array_and_hash_contents_have_no_diagnostic();

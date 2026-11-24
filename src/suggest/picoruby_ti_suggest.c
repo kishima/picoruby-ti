@@ -334,6 +334,70 @@ append_builtin_class_suggestions(
   }
 }
 
+/* "Outer::PREF" offers the database classes nested directly in Outer
+   ("Outer::Inner" -> "Inner"). The names point into the database, no copy. */
+static void
+append_nested_class_suggestions(
+  uint8_t outer_class_id,
+  const uint8_t *prefix,
+  size_t prefix_length,
+  TiSuggestionList *out
+) {
+
+  const char *outer_name = ti_get_builtin_class_name(outer_class_id);
+
+  if (!outer_name)
+    return;
+
+  size_t outer_length = strlen(outer_name);
+
+  for (
+    uint8_t class_id = 1;
+    class_id < ti_builtin_class_count &&
+    out->count < TI_SUGGESTION_CAPACITY;
+    class_id++
+  ) {
+
+    const char *class_name = ti_get_builtin_class_name(class_id);
+
+    if (
+      strncmp(class_name, outer_name, outer_length) != 0 ||
+      class_name[outer_length] != ':' ||
+      class_name[outer_length + 1] != ':'
+    ) {
+
+      continue;
+    }
+
+    const char *inner_name = class_name + outer_length + 2;
+
+    if (strstr(inner_name, "::"))
+      continue;
+
+    size_t inner_length = strlen(inner_name);
+
+    if (!matches_prefix(
+          (const uint8_t *)inner_name,
+          inner_length,
+          prefix,
+          prefix_length
+        )) {
+
+      continue;
+    }
+
+    if (has_suggestion(out, inner_name, class_name))
+      continue;
+
+    TiSuggestion *suggestion = &out->items[out->count++];
+    suggestion->detail = class_name;
+    suggestion->document = "";
+    suggestion->contents = inner_name;
+    suggestion->contents_length = (int)inner_length;
+    suggestion->class_name = NULL;
+  }
+}
+
 static void
 append_defined_class_suggestions(
   TiContext *context,
@@ -693,6 +757,17 @@ ti_collect_suggestions_at_cursor(
         max_additions,
         out
       );
+
+      /* The nested classes come last, so they never push out a candidate
+         offered before. */
+      if (is_scope && is_static_target) {
+        append_nested_class_suggestions(
+          target_t->object_class_id,
+          prefix,
+          prefix_length,
+          out
+        );
+      }
     }
 
     target_t = ti_get_t(target_t->union_next);

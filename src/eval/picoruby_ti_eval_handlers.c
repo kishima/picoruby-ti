@@ -3,6 +3,7 @@
 #include "picoruby_ti_define_info.h"
 #include "picoruby_ti_t.h"
 #include "picoruby_ti_t_frame.h"
+#include <string.h>
 
 uint16_t
 ti_handle_identifier(TiContext *context, pm_constant_id_t constant_id) {
@@ -59,34 +60,113 @@ ti_handle_identifier(TiContext *context, pm_constant_id_t constant_id) {
   return 0;
 }
 
+/* A constant path names at most this many segments ("A::B::C" is three).
+   Longer paths stay untyped; no database class is that deep. */
+#define TI_CONSTANT_PATH_DEPTH_LIMIT 8
+
+/* Does the constant path spelled by node ("A::B::C", "::A::B", or a bare
+   "A") equal the database class name "A::B::C"? Walks the path from the leaf
+   to the root, matching each segment against the tail of the name, so no
+   buffer is needed. A leading "::" matches like the unqualified path. */
+static int
+constant_path_matches_name(
+  TiContext *context,
+  const pm_node_t *node,
+  const char *name,
+  size_t name_length
+) {
+
+  size_t end = name_length;
+
+  for (int depth = 0; depth < TI_CONSTANT_PATH_DEPTH_LIMIT; depth++) {
+    pm_constant_id_t segment_id;
+    const pm_node_t *parent = NULL;
+
+    if (PM_NODE_TYPE(node) == PM_CONSTANT_READ_NODE) {
+      segment_id = ((const pm_constant_read_node_t *)node)->name;
+    } else if (PM_NODE_TYPE(node) == PM_CONSTANT_PATH_NODE) {
+      const pm_constant_path_node_t *path =
+        (const pm_constant_path_node_t *)node;
+
+      segment_id = path->name;
+      parent = path->parent;
+    } else {
+      return 0;
+    }
+
+    if (segment_id == 0)
+      return 0;
+
+    const pm_constant_t *segment = ti_get_constant(context, segment_id);
+
+    if (
+      !segment ||
+      segment->length == 0 ||
+      segment->length > end ||
+      memcmp(name + end - segment->length, segment->start, segment->length) != 0
+    ) {
+
+      return 0;
+    }
+
+    end -= segment->length;
+
+    /* The root: a constant read, or a path with no parent ("::A"). */
+    if (!parent)
+      return end == 0;
+
+    if (end < 2 || name[end - 1] != ':' || name[end - 2] != ':')
+      return 0;
+
+    end -= 2;
+    node = parent;
+  }
+
+  return 0;
+}
+
+/* The database class the constant path names, or TI_CLASS_NONE. */
+static uint8_t
+resolve_constant_path_class_id(TiContext *context, const pm_node_t *node) {
+  if (!node)
+    return TI_CLASS_NONE;
+
+  for (uint8_t class_id = 1; class_id < ti_builtin_class_count; class_id++) {
+    const char *class_name = ti_get_builtin_class_name(class_id);
+
+    if (
+      class_name &&
+      constant_path_matches_name(context, node, class_name, strlen(class_name))
+    ) {
+
+      return class_id;
+    }
+  }
+
+  return TI_CLASS_NONE;
+}
+
 uint16_t
 ti_handle_constant_path(
   TiContext *context,
   const pm_constant_path_node_t *constant_path
 ) {
 
-  /* Only the plain "Klass::CONST" shape where Klass is a database class;
-     deeper paths and user-class constants stay untyped. */
-  if (
-    !constant_path->parent ||
-    PM_NODE_TYPE(constant_path->parent) != PM_CONSTANT_READ_NODE ||
-    constant_path->name == 0
-  ) {
-
-    return 0;
-  }
-
-  const pm_constant_t *parent_constant =
-    ti_get_constant(
-      context,
-      ((const pm_constant_read_node_t *)constant_path->parent)->name
-    );
-
-  if (!parent_constant)
+  if (constant_path->name == 0)
     return 0;
 
+  /* "A::B" (or "A::B::C", "::A::B") naming a database class is that class,
+     static -- the same as reading a top-level "Foo". */
+  uint8_t path_class_id =
+    resolve_constant_path_class_id(context, (const pm_node_t *)constant_path);
+
+  if (path_class_id != TI_CLASS_NONE)
+    return ti_new_t(path_class_id, TI_T_FLAG_STATIC, 0);
+
+  /* Otherwise "Klass::CONST" where Klass is a database class (itself possibly
+     nested). User-class constants stay untyped. */
   uint8_t class_id =
-    ti_get_builtin_class_id(parent_constant->start, parent_constant->length);
+    resolve_constant_path_class_id(context, constant_path->parent);
 
   if (class_id == TI_CLASS_NONE)
     return 0;
