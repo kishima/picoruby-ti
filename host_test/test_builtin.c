@@ -131,12 +131,19 @@ test_pool_boundaries(void) {
     ));
   }
 
+  /* The high byte of the 24-bit document offset sits in what was padding:
+     the tables are the size they were with 16-bit offsets. */
+  _Static_assert(sizeof(TiBuiltinMethod) == 18, "TiBuiltinMethod grew");
+  _Static_assert(sizeof(TiBuiltinConstant) == 10, "TiBuiltinConstant grew");
+
   for (uint16_t index = 0; index < ti_builtin_method_count; index++) {
     const TiBuiltinMethod *method = &ti_builtin_methods[index];
 
     assert(method->name_offset < ti_builtin_name_pool_size);
     assert(method->signature_offset < ti_builtin_signature_pool_size);
-    assert(method->document_offset < ti_builtin_document_pool_size);
+    const uint32_t document_offset = TI_BUILTIN_DOCUMENT_OFFSET(method);
+
+    assert(document_offset < ti_builtin_document_pool_size);
     assert(memchr(
       ti_builtin_name_pool + method->name_offset,
       '\0',
@@ -148,9 +155,9 @@ test_pool_boundaries(void) {
       ti_builtin_signature_pool_size - method->signature_offset
     ));
     assert(memchr(
-      ti_builtin_document_pool + method->document_offset,
+      ti_builtin_document_pool + document_offset,
       '\0',
-      ti_builtin_document_pool_size - method->document_offset
+      ti_builtin_document_pool_size - document_offset
     ));
   }
 

@@ -180,7 +180,7 @@ ti_get_builtin_constant_signature(const TiBuiltinConstant *builtin_constant) {
 
 const char *
 ti_get_builtin_constant_document(const TiBuiltinConstant *builtin_constant) {
-  return &ti_builtin_document_pool[builtin_constant->document_offset];
+  return &ti_builtin_document_pool[TI_BUILTIN_DOCUMENT_OFFSET(builtin_constant)];
 }
 
 static void
@@ -390,7 +390,7 @@ ti_get_builtin_signature(const TiBuiltinMethod *builtin_method) {
 
 const char *
 ti_get_builtin_document(const TiBuiltinMethod *builtin_method) {
-  return &ti_builtin_document_pool[builtin_method->document_offset];
+  return &ti_builtin_document_pool[TI_BUILTIN_DOCUMENT_OFFSET(builtin_method)];
 }
 
 const char *

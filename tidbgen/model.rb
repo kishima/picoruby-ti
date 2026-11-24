@@ -19,22 +19,32 @@ module TiDatabaseGenerator
     union_index: "uint16_t"
   }.freeze
 
+  # The document pool is the big one (a summary line per method, in two
+  # languages), so its offsets are 24 bits: the low 16 where the offset
+  # always was, and the high 8 in a byte of its own. That byte sits where
+  # the compiler padded the structure (after an odd run of uint8_t, before
+  # the next uint16_t), so the tables do not grow. Read it with
+  # TI_BUILTIN_DOCUMENT_OFFSET (the generated header).
+  DOCUMENT_POOL_BYTE_LIMIT = 0xFF_FFFF
+
   BUILTIN_CONSTANT_FIELD_DEFINITIONS = {
     name_offset: "uint16_t",
     signature_offset: "uint16_t",
-    document_offset: "uint16_t",
+    document_offset_low: "uint16_t",
     class_identifier: "uint8_t",
+    document_offset_high: "uint8_t",
     union_index: "uint16_t"
   }.freeze
 
   BUILTIN_METHOD_FIELD_DEFINITIONS = {
     name_offset: "uint16_t",
     signature_offset: "uint16_t",
-    document_offset: "uint16_t",
+    document_offset_low: "uint16_t",
     argument_start_index: "uint16_t",
     argument_count: "uint8_t",
     return_class_identifier: "uint8_t",
     return_array_variant_class_identifier: "uint8_t",
+    document_offset_high: "uint8_t",
     return_union_index: "uint16_t",
     array_variant_union_index: "uint16_t",
     block_parameter_class_identifier: "uint8_t",

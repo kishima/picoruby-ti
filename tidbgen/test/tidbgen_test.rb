@@ -415,4 +415,33 @@ class TiDatabaseGeneratorTest < Minitest::Test
     end
   end
 
+  # The document pool's offsets are 24 bits: a pool past 65535 bytes is
+  # built, and its offsets come back whole from the two fields.
+  def test_document_pool_is_addressed_with_24_bits
+    string_pool =
+      TiDatabaseGenerator::StringPool.new(
+        pool_name: "document",
+        byte_limit: TiDatabaseGenerator::DOCUMENT_POOL_BYTE_LIMIT
+      )
+
+    string_pool.add_string_and_return_offset(string: "x" * 70_000)
+    offset = string_pool.add_string_and_return_offset(string: "after")
+
+    assert_equal 70_002, offset
+    assert_equal 1, offset >> 16
+    assert_equal 4466, offset & 0xFFFF
+    assert_raises(RuntimeError) do
+      string_pool.add_string_and_return_offset(string: "y" * 16_777_216)
+    end
+
+    method_fields = TiDatabaseGenerator::BUILTIN_METHOD_FIELD_DEFINITIONS
+    constant_fields = TiDatabaseGenerator::BUILTIN_CONSTANT_FIELD_DEFINITIONS
+
+    [method_fields, constant_fields].each do |fields|
+      assert_equal "uint16_t", fields.fetch(:document_offset_low)
+      assert_equal "uint8_t", fields.fetch(:document_offset_high)
+      refute fields.key?(:document_offset)
+    end
+  end
+
 end

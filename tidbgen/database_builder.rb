@@ -36,7 +36,10 @@ module TiDatabaseGenerator
       @signature_renderer = SignatureRenderer.new
       @name_pool = StringPool.new(pool_name: "name")
       @signature_pool = StringPool.new(pool_name: "signature")
-      @document_pool = StringPool.new(pool_name: "document")
+      @document_pool = StringPool.new(
+        pool_name: "document",
+        byte_limit: DOCUMENT_POOL_BYTE_LIMIT
+      )
 
       @union_pool = UnionPool.new
 
@@ -65,8 +68,8 @@ module TiDatabaseGenerator
     # candidate, so a summary is all it can display. Longer text -- a
     # paragraph of explanation, an example -- is worth writing, but it does
     # not belong in a table that lives in the firmware's flash: the string
-    # pools are 65535 bytes each, and a handful of examples would fill the
-    # document pool on their own. Writing the summary on the first line and
+    # document pool is addressed with 24 bits, but every byte of it is
+    # flash, and examples would be most of it. Writing the summary on the first line and
     # the long form below it lets both live in one place in the signatures,
     # with only the summary compiled in.
     def summary_line_of(comment:)
@@ -217,15 +220,19 @@ module TiDatabaseGenerator
             error_context:
           )
 
+        constant_document_offset =
+          @document_pool.add_string_and_return_offset(
+            string: summary_line_of(comment: collected_constant.comment)
+          )
+
         @builtin_constants << BuiltinConstantRecord.new(
           name_offset: @name_pool.add_string_and_return_offset(string: name),
           signature_offset: @signature_pool.add_string_and_return_offset(
             string: "#{name}: #{collected_constant.type}"
           ),
-          document_offset: @document_pool.add_string_and_return_offset(
-            string: summary_line_of(comment: collected_constant.comment)
-          ),
+          document_offset_low: constant_document_offset & 0xFFFF,
           class_identifier: class_identifiers.first || 0,
+          document_offset_high: constant_document_offset >> 16,
           union_index: @union_pool.resolve_union_index(
             class_identifiers:,
             error_context:
@@ -537,19 +544,23 @@ module TiDatabaseGenerator
           error_context: "#{error_context} array variant"
         )
 
+      method_document_offset =
+        @document_pool.add_string_and_return_offset(
+          string: summary_line_of(comment: collected_method.comment)
+        )
+
       BuiltinMethodRecord.new(
         name_offset: @name_pool.add_string_and_return_offset(string: collected_method.name),
         signature_offset: @signature_pool.add_string_and_return_offset(
           string: @signature_renderer.render_method_signature(collected_method:)
         ),
-        document_offset: @document_pool.add_string_and_return_offset(
-          string: summary_line_of(comment: collected_method.comment)
-        ),
+        document_offset_low: method_document_offset & 0xFFFF,
         argument_start_index:,
         argument_count:,
         return_class_identifier: return_class_identifiers.first || 0,
         return_array_variant_class_identifier:
           array_variant_class_identifiers.first || 0,
+        document_offset_high: method_document_offset >> 16,
         return_union_index: @union_pool.resolve_union_index(
           class_identifiers: return_class_identifiers,
           error_context: "#{error_context} return type"

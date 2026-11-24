@@ -13,8 +13,11 @@ module TiDatabaseGenerator
   class StringPool
     attr_reader :binary_string
 
-    def initialize(pool_name:)
+    # byte_limit: the largest pool the offsets into it can address (16 bits
+    # unless the tables keep more for this pool).
+    def initialize(pool_name:, byte_limit: 65_535)
       @pool_name = pool_name
+      @byte_limit = byte_limit
       @binary_string = +"".b
       @string_offsets = {}
       add_string_and_return_offset(string: "")
@@ -29,8 +32,8 @@ module TiDatabaseGenerator
 
       new_pool_byte_size = @binary_string.bytesize + encoded_string.bytesize + 1
 
-      if new_pool_byte_size > 65_535
-        raise "#{@pool_name} string pool exceeds 65535 bytes (#{new_pool_byte_size})"
+      if new_pool_byte_size > @byte_limit
+        raise "#{@pool_name} string pool exceeds #{@byte_limit} bytes (#{new_pool_byte_size})"
       end
 
       @string_offsets[encoded_string] = @binary_string.bytesize
