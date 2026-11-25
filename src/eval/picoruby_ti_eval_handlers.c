@@ -125,11 +125,18 @@ constant_path_matches_name(
   return 0;
 }
 
-/* The database class the constant path names, or TI_CLASS_NONE. */
-static uint8_t
-resolve_constant_path_class_id(TiContext *context, const pm_node_t *node) {
-  if (!node)
+/* The database class the constant path (or a bare constant) names, or
+   TI_CLASS_NONE: for anything else too (a splat, an expression). */
+uint8_t
+ti_resolve_constant_class_id(TiContext *context, const pm_node_t *node) {
+  if (
+    !node ||
+    (PM_NODE_TYPE(node) != PM_CONSTANT_READ_NODE &&
+     PM_NODE_TYPE(node) != PM_CONSTANT_PATH_NODE)
+  ) {
+
     return TI_CLASS_NONE;
+  }
 
   for (uint8_t class_id = 1; class_id < ti_builtin_class_count; class_id++) {
     const char *class_name = ti_get_builtin_class_name(class_id);
@@ -158,7 +165,7 @@ ti_handle_constant_path(
   /* "A::B" (or "A::B::C", "::A::B") naming a database class is that class,
      static -- the same as reading a top-level "Foo". */
   uint8_t path_class_id =
-    resolve_constant_path_class_id(context, (const pm_node_t *)constant_path);
+    ti_resolve_constant_class_id(context, (const pm_node_t *)constant_path);
 
   if (path_class_id != TI_CLASS_NONE)
     return ti_new_t(path_class_id, TI_T_FLAG_STATIC, 0);
@@ -166,7 +173,7 @@ ti_handle_constant_path(
   /* Otherwise "Klass::CONST" where Klass is a database class (itself possibly
      nested). User-class constants stay untyped. */
   uint8_t class_id =
-    resolve_constant_path_class_id(context, constant_path->parent);
+    ti_resolve_constant_class_id(context, constant_path->parent);
 
   if (class_id == TI_CLASS_NONE)
     return 0;

@@ -774,6 +774,154 @@ test_nested_class_diagnostic(void) {
   assert(diagnostics.count == 0);
 }
 
+static int
+diagnostic_count_is(const char *source, int count) {
+  TiDiagnosticList diagnostics = diagnose_source(source);
+  return diagnostics.count == count;
+}
+
+static const char *
+hover_type_at(const char *source, const char *needle) {
+  static TiHoverInfo hover_info;
+  const char *target = strstr(source, needle);
+  assert(target);
+
+  /* the cursor on the needle's first non-blank */
+  target += strspn(target, " ");
+
+  if (!find_hover(source, (int)(target - source), &hover_info))
+    return "(none)";
+
+  return hover_info.type_name;
+}
+
+static void
+test_rescue_variable_type(void) {
+  /* one class, a bare rescue (StandardError), a nested class */
+  TiDiagnosticList diagnostics = diagnose_source(
+    "begin\n  x = 1\nrescue ArgumentError => e\n  e.message(1)\nend"
+  );
+  assert(diagnostics.count == 1);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "too many arguments for ArgumentError.message"
+  ) == 0);
+
+  diagnostics =
+    diagnose_source("begin\n  x = 1\nrescue => e\n  e.message(1)\nend");
+  assert(diagnostics.count == 1);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "too many arguments for StandardError.message"
+  ) == 0);
+
+  assert(diagnostic_count_is(
+    "begin\nrescue JSON::ParserError => e\n  e.message(1)\nend", 1));
+  assert(diagnostic_count_is(
+    "begin\nrescue ::ArgumentError => e\n  e.message\nend", 0));
+
+  /* the types the variable gets */
+  assert(strcmp(hover_type_at(
+    "begin\nrescue ArgumentError => e\n  e\nend", "  e\n"),
+    "ArgumentError") == 0);
+  assert(strcmp(hover_type_at(
+    "begin\nrescue => e\n  e\nend", "  e\n"), "StandardError") == 0);
+  assert(strcmp(hover_type_at(
+    "begin\nrescue JSON::ParserError => e\n  e\nend", "  e\n"),
+    "JSON::ParserError") == 0);
+  /* several classes: a union (unions are not checked for arguments) */
+  assert(strcmp(hover_type_at(
+    "begin\nrescue ArgumentError, RuntimeError => e\n  e\nend", "  e\n"),
+    "Union<ArgumentError RuntimeError>") == 0);
+  assert(diagnostic_count_is(
+    "begin\nrescue ArgumentError, RuntimeError => e\n  e.message(1)\nend", 0));
+  /* more classes than a union holds: untyped, no diagnostic */
+  assert(diagnostic_count_is(
+    "begin\nrescue ArgumentError, RuntimeError, TypeError, IndexError,"
+    " KeyError, RangeError => e\n  e.message(1)\nend", 0));
+
+  /* instance and global variables take the type too */
+  assert(diagnostic_count_is(
+    "begin\nrescue => @err\n  @err.message(1)\nend", 1));
+  assert(diagnostic_count_is(
+    "begin\nrescue => $err\n  $err.message(1)\nend", 1));
+}
+
+static void
+test_rescue_variable_unknown_class(void) {
+  /* the user's class, one unknown among known ones, a splat, an unknown
+     constant: the variable stays untyped */
+  assert(diagnostic_count_is(
+    "class MyErr < StandardError\nend\n"
+    "begin\nrescue MyErr => e\n  e.message(1)\nend", 0));
+  assert(diagnostic_count_is(
+    "begin\nrescue MyErr, ArgumentError => e\n  e.message(1)\nend", 0));
+  assert(diagnostic_count_is(
+    "begin\nrescue *ERRS => e\n  e.message(1)\nend", 0));
+  assert(diagnostic_count_is(
+    "begin\nrescue NoSuch::Error => e\n  e.message(1)\nend", 0));
+  assert(diagnostic_count_is(
+    "begin\nrescue error_class => e\n  e.message(1)\nend", 0));
+}
+
+static void
+test_rescue_forms(void) {
+  /* a method body with rescue, a begin inside a method */
+  assert(diagnostic_count_is(
+    "def f\n  1\nrescue => e\n  e.message(1)\nend", 1));
+  assert(diagnostic_count_is(
+    "def h\n  begin\n    1\n  rescue => e\n    e.message(1)\n  end\nend", 1));
+  /* ensure and else are evaluated too */
+  assert(diagnostic_count_is(
+    "begin\n  1\nrescue => e\n  e.message(1)\n"
+    "ensure\n  \"a\".byteslice(1, 2, 3)\nend", 2));
+  assert(diagnostic_count_is(
+    "def g\n  1\nrescue => e\n  e.message(1)\n"
+    "else\n  \"a\".byteslice(1, 2, 3)\nensure\n  2\nend", 2));
+  assert(diagnostic_count_is("begin\n  1\nensure\n  2\nend", 0));
+  /* several rescue clauses, each its own variable */
+  TiDiagnosticList diagnostics = diagnose_source(
+    "begin\nrescue ArgumentError => a\n  a.message(1)\n"
+    "rescue => b\n  b.message(1)\nend"
+  );
+  assert(diagnostics.count == 2);
+  assert(strcmp(
+    diagnostics.items[0].message,
+    "too many arguments for ArgumentError.message"
+  ) == 0);
+  assert(strcmp(
+    diagnostics.items[1].message,
+    "too many arguments for StandardError.message"
+  ) == 0);
+  /* no variable, a modifier rescue, an empty clause: nothing breaks */
+  assert(diagnostic_count_is("begin\n  1\nrescue ArgumentError\n  2\nend", 0));
+  assert(diagnostic_count_is(
+    "x = foo rescue nil\n\"a\".byteslice(1, 2, 3)", 1));
+  assert(diagnostic_count_is("begin\nrescue => e\nend", 0));
+  /* a block's body is not evaluated (as before): no diagnostic, no crash */
+  assert(diagnostic_count_is(
+    "[1].each do |i|\n  i\nrescue => e\n  e.message(1)\nend", 0));
+  /* still open (being typed) */
+  assert(diagnostic_count_is("begin\n  1\nrescue => e\n  e.message(1)\n", 1));
+}
+
+static void
+test_rescue_method_return(void) {
+  /* a method with rescue returns what its body or its rescue leaves */
+  TiSuggestionList suggestions = suggest_source(
+    "def g\n  1\nrescue\n  \"x\"\nend\ng()."
+  );
+  assert(has_suggestion(&suggestions, "abs"));
+  assert(has_suggestion(&suggestions, "bytes"));
+
+  suggestions = suggest_source(
+    "def k\n  1\nrescue => e\n  e\nelse\n  \"x\"\nensure\n  :s\nend\nk()."
+  );
+  assert(has_suggestion(&suggestions, "bytes"));
+  assert(has_suggestion(&suggestions, "message"));
+  assert(!has_suggestion(&suggestions, "abs"));
+}
+
 static void
 test_binding_overflow(void) {
   size_t capacity = 24000;
@@ -817,6 +965,10 @@ main(void) {
   test_nested_class_path_unknown();
   test_nested_class_user_class_unchanged();
   test_nested_class_diagnostic();
+  test_rescue_variable_type();
+  test_rescue_variable_unknown_class();
+  test_rescue_forms();
+  test_rescue_method_return();
   test_builtin_argument_type_diagnostic();
   test_unknown_argument_has_no_diagnostic();
   test_array_and_hash_contents_have_no_diagnostic();

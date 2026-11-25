@@ -10,6 +10,7 @@
 #include "picoruby_ti_ifunless.h"
 #include "picoruby_ti_method_evaluator.h"
 #include "picoruby_ti_name.h"
+#include "picoruby_ti_rescue.h"
 #include "picoruby_ti_return.h"
 #include "picoruby_ti_square_bracket.h"
 #include "picoruby_ti_t.h"
@@ -187,6 +188,9 @@ ti_eval_expression(TiContext *context, const pm_node_t *node, int depth) {
   case PM_RETURN_NODE:
     return ti_eval_return(context, (const pm_return_node_t *)node, depth);
 
+  case PM_BEGIN_NODE:
+    return ti_eval_begin(context, (const pm_begin_node_t *)node, depth);
+
   default:
     return 0;
   }
@@ -238,6 +242,12 @@ eval_on_visit(const pm_node_t *node, void *data) {
   case PM_DEF_NODE:
     ti_eval_def(context, (const pm_def_node_t *)node);
     return false;
+
+  /* "rescue Foo => e": bind e before the clause's statements are visited
+     (they are this node's children, visited next). */
+  case PM_RESCUE_NODE:
+    ti_bind_rescue_reference(context, (const pm_rescue_node_t *)node);
+    return !context->failed;
 
   case PM_CALL_NODE:
     ti_eval_method(context, (const pm_call_node_t *)node, 0);

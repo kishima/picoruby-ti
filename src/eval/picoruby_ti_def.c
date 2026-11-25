@@ -1,6 +1,7 @@
 #include "picoruby_ti_def.h"
 #include "picoruby_ti_define_info.h"
 #include "picoruby_ti_eval.h"
+#include "picoruby_ti_rescue.h"
 #include "picoruby_ti_t.h"
 #include "picoruby_ti_t_frame.h"
 #include <stdint.h>
@@ -66,12 +67,20 @@ ti_eval_def(TiContext *context, const pm_def_node_t *def_node) {
   uint16_t outer_return_t_node_index = context->return_t_node_index;
   context->return_t_node_index = 0;
 
-  uint16_t last_evaluated_t_node_index =
-    ti_eval_statements(
-      context,
-      (const pm_statements_node_t *)def_node->body,
-      0
-    );
+  /* A body with rescue/ensure is a begin node, not a statements node. */
+  uint16_t last_evaluated_t_node_index = 0;
+
+  if (def_node->body && PM_NODE_TYPE(def_node->body) == PM_BEGIN_NODE) {
+    last_evaluated_t_node_index =
+      ti_eval_begin(context, (const pm_begin_node_t *)def_node->body, 0);
+  } else {
+    last_evaluated_t_node_index =
+      ti_eval_statements(
+        context,
+        (const pm_statements_node_t *)def_node->body,
+        0
+      );
+  }
 
   uint16_t return_t_node_index =
     ti_make_union(context->return_t_node_index, last_evaluated_t_node_index);

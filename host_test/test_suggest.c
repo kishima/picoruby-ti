@@ -450,9 +450,37 @@ test_receiverless_inherited_method_suggestion(void) {
   assert(find_suggestion(&suggestions, "base_helper"));
 }
 
+static void
+test_rescue_variable_suggestion(void) {
+  TiSuggestionList suggestions = suggest_source(
+    "begin\n  x = 1\nrescue ArgumentError => e\n  e.mess"
+  );
+  assert(suggestions.count == 1);
+  assert(strcmp(suggestions.items[0].contents, "message") == 0);
+
+  suggestions = suggest_source("begin\nrescue => e\n  e.");
+  assert(find_suggestion(&suggestions, "message"));
+  assert(find_suggestion(&suggestions, "backtrace"));
+
+  suggestions = suggest_source("begin\nrescue JSON::ParserError => e\n  e.mess");
+  assert(suggestions.count == 1);
+
+  suggestions = suggest_source("def f\n  1\nrescue => e\n  e.mess");
+  assert(suggestions.count == 1);
+
+  suggestions =
+    suggest_source("begin\nrescue ArgumentError, RuntimeError => e\n  e.mess");
+  assert(suggestions.count == 1);
+
+  /* the user's class: nothing to offer */
+  suggestions = suggest_source("begin\nrescue MyErr => e\n  e.mess");
+  assert(suggestions.count == 0);
+}
+
 int
 main(void) {
   test_nested_class_suggestion();
+  test_rescue_variable_suggestion();
   test_nested_class_scope_suggestion();
   test_string_suggestion();
   test_prefix_suggestion();

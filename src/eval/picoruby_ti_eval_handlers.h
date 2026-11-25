@@ -16,5 +16,9 @@ uint16_t ti_handle_constant_path(
   TiContext *context,
   const pm_constant_path_node_t *constant_path
 );
+uint8_t ti_resolve_constant_class_id(
+  TiContext *context,
+  const pm_node_t *node
+);
 
 #endif
